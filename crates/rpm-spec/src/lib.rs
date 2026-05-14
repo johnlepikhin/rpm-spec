@@ -11,12 +11,12 @@
 //!
 //! # Crate layout
 //!
-//! - [`ast`]          — abstract syntax tree.
+//! - [`ast`] — abstract syntax tree.
 //! - [`parse_result`] — [`parse_result::ParseResult`] /
-//!                      [`parse_result::Diagnostic`] returned by the parser.
-//! - [`parser`]       — `&str → ParseResult` (feature `parser`, in progress).
-//! - [`printer`]      — `AST → String` (feature `printer`, in progress).
-//! - [`error`]        — fatal error types.
+//!   [`parse_result::Diagnostic`] returned by the parser.
+//! - [`parser`] — `&str → ParseResult` (feature `parser`, in progress).
+//! - [`printer`] — `AST → String` (feature `printer`, in progress).
+//! - [`error`] — fatal error types.
 //!
 //! # Generic `T` parameter
 //!
@@ -34,6 +34,10 @@
 //! written in the source — case is **not** normalized. This invariant exists
 //! so that downstream validators can match names against
 //! distribution-specific registries.
+
+#![forbid(unsafe_code)]
+#![warn(missing_debug_implementations)]
+#![deny(missing_docs)]
 
 pub mod ast;
 pub mod error;

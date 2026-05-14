@@ -4,6 +4,8 @@
 //! module covers everything that introduces or annotates source without
 //! producing a value at a particular position.
 
+#![allow(missing_docs)]
+
 use super::text::Text;
 
 /// `%define` / `%global` / `%undefine` at the top level of a spec.
@@ -12,6 +14,7 @@ use super::text::Text;
 /// can pair them with a distribution registry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct MacroDef<T = ()> {
     pub kind:     MacroDefKind,
     /// Verbatim macro name (no leading `%`).
@@ -33,6 +36,7 @@ pub struct MacroDef<T = ()> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum MacroDefKind {
     /// `%define` — lazy expansion, scoped inside parametric macros.
     Define,
@@ -45,6 +49,7 @@ pub enum MacroDefKind {
 /// `%bcond` / `%bcond_with` / `%bcond_without` — build-time toggles.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct BuildCondition<T = ()> {
     pub style:   BuildCondStyle,
     /// Verbatim feature name (without the `bcond_*` prefix).
@@ -57,6 +62,7 @@ pub struct BuildCondition<T = ()> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum BuildCondStyle {
     /// `%bcond name DEFAULT` — rpm ≥ 4.17.1.
     Bcond,
@@ -69,19 +75,26 @@ pub enum BuildCondStyle {
 /// `%include path` directive — kept verbatim, never expanded by this crate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct IncludeDirective<T = ()> {
     pub path: Text,
     pub data: T,
 }
 
 /// A comment line.
+///
+/// `text` is stored as [`Text`] rather than `String` because RPM expands
+/// macros inside `#`-style comments (see [`CommentStyle::Hash`]). Keeping
+/// macros as AST nodes lets validators flag side-effects that would
+/// otherwise be invisible to a casual reader.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Comment<T = ()> {
     pub style: CommentStyle,
     /// Body of the comment without the leading `#` / `%dnl` and without the
     /// single optional space that customarily follows them.
-    pub text:  String,
+    pub text:  Text,
     pub data:  T,
 }
 
@@ -92,6 +105,7 @@ pub struct Comment<T = ()> {
 /// truly inert comment form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum CommentStyle {
     /// `# comment` — beware: macros inside ARE expanded by RPM at parse time.
     Hash,

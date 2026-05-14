@@ -4,6 +4,8 @@
 //! used in [`Tag`]. Unknown or distribution-specific tags fall into
 //! [`Tag::Other`] which preserves the verbatim spelling.
 
+#![allow(missing_docs)]
+
 use super::cond::Conditional;
 use super::deps::DepExpr;
 use super::macros::Comment;
@@ -14,6 +16,7 @@ use super::text::Text;
 /// interleaved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum PreambleContent<T = ()> {
     Item(PreambleItem<T>),
     Conditional(Conditional<T, PreambleContent<T>>),
@@ -23,6 +26,7 @@ pub enum PreambleContent<T = ()> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct PreambleItem<T = ()> {
     pub tag:        Tag,
     /// Qualifiers in parentheses after the tag name, e.g.
@@ -123,6 +127,7 @@ pub enum TagQualifier {
 /// kind; the [`Text`] variant is the universal fallback for free-form values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum TagValue {
     /// Free-form text (URL, Summary, Source path, License expression, …).
     Text(Text),

@@ -9,7 +9,10 @@ repository = "https://github.com/johnlepikhin/rpm-spec"
 authors    = ["Evgenii Lepikhin <johnlepikhin@gmail.com>"]
 
 [workspace.dependencies]
-nom    = { version = "8.0", default-features = false, features = ["alloc"] }
-pretty = { version = "0.12" }
-serde  = { version = "1.0", features = ["derive"] }
+nom        = { version = "8.0", default-features = false, features = ["alloc"] }
+nom_locate = { version = "5.0" }
+pretty     = { version = "0.12" }
+serde      = { version = "1.0", features = ["derive"] }
+thiserror  = { version = "2.0" }
+tracing    = { version = "0.1", default-features = false, features = ["attributes"] }
 pretty_assertions = "1"

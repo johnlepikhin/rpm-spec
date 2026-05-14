@@ -4,11 +4,14 @@
 //! Both classic atoms (`name (op evr)?`) and RPM 4.13+ rich/boolean
 //! dependencies (`(foo and bar)`, `(foo if bar else baz)`) are represented.
 
+#![allow(missing_docs)]
+
 use super::text::Text;
 
 /// A single dependency clause.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum DepExpr {
     Atom(DepAtom),
     Rich(Box<BoolDep>),
@@ -23,6 +26,7 @@ pub enum DepExpr {
 /// - `/usr/bin/awk`
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct DepAtom {
     /// Dependency name. Can be a package name, a `name(provider)` virtual,
     /// or an absolute file path. May contain macros.
@@ -35,6 +39,7 @@ pub struct DepAtom {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct DepConstraint {
     pub op:  VerOp,
     pub evr: EVR,
@@ -43,6 +48,7 @@ pub struct DepConstraint {
 /// Version comparison operator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum VerOp {
     Lt,
     Le,
@@ -55,30 +61,39 @@ pub enum VerOp {
 /// Epoch–Version–Release triple. Epoch and Release are optional.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct EVR {
     pub epoch:   Option<u32>,
     pub version: Text,
     pub release: Option<Text>,
 }
 
-/// Boolean/rich dependency tree (RPM ≥ 4.13).
+/// Boolean / rich dependency tree (RPM ≥ 4.13).
+///
+/// Variants with one or more child expressions box them (`Box<DepExpr>`) to
+/// keep the enum's footprint small — without boxing, `If` and friends would
+/// inflate every other variant to several hundred bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum BoolDep {
     And(Vec<DepExpr>),
     Or(Vec<DepExpr>),
-    /// `(then if cond)` or `(then if cond else else_)`.
+    /// `(then if cond)` or `(then if cond else otherwise)`.
     If {
-        cond:  DepExpr,
-        then:  DepExpr,
-        else_: Option<DepExpr>,
+        cond:      Box<DepExpr>,
+        then:      Box<DepExpr>,
+        otherwise: Option<Box<DepExpr>>,
     },
-    /// `(then unless cond)` or `(then unless cond else else_)`.
+    /// `(then unless cond)` or `(then unless cond else otherwise)`.
     Unless {
-        cond:  DepExpr,
-        then:  DepExpr,
-        else_: Option<DepExpr>,
+        cond:      Box<DepExpr>,
+        then:      Box<DepExpr>,
+        otherwise: Option<Box<DepExpr>>,
     },
     With(Vec<DepExpr>),
-    Without { left: DepExpr, right: DepExpr },
+    Without {
+        left:  Box<DepExpr>,
+        right: Box<DepExpr>,
+    },
 }

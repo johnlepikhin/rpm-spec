@@ -4,6 +4,8 @@
 //! scriptlet/trigger bodies are stored as [`ShellBody`] — sequences of text
 //! lines that may contain macro references but are *not* parsed as bash.
 
+#![allow(missing_docs)]
+
 use super::changelog::ChangelogEntry;
 use super::files::FilesContent;
 use super::preamble::PreambleContent;
@@ -12,6 +14,7 @@ use super::text::Text;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Section<T = ()> {
     /// `%description [-n] [sub]` — free-form text body.
     Description {
@@ -68,6 +71,7 @@ pub enum Section<T = ()> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum BuildScriptKind {
     Prep,
     /// `%conf` — rpm ≥ 4.18.
@@ -84,6 +88,7 @@ pub enum BuildScriptKind {
 /// Argument of `%package`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum PackageName {
     /// `%package foo` — appended to the main name: `<main>-foo`.
     Relative(Text),
@@ -94,6 +99,7 @@ pub enum PackageName {
 /// `-n SUB` or bare `SUB` modifier on a section header.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum SubpkgRef {
     /// Bare suffix form: `<main>-SUB`.
     Relative(Text),
@@ -105,6 +111,7 @@ pub enum SubpkgRef {
 /// an empty [`Text`] denotes a blank line.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct TextBody {
     pub lines: Vec<Text>,
 }
@@ -117,6 +124,7 @@ pub struct TextBody {
 /// as text lines, not as structural [`super::cond::Conditional`] nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct ShellBody {
     pub lines: Vec<Text>,
 }

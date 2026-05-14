@@ -2,12 +2,19 @@
 //!
 //! See `man rpm-scriptlets` for runtime semantics.
 
+#![allow(missing_docs)]
+
 use super::deps::DepExpr;
 use super::section::{ShellBody, SubpkgRef};
 use super::text::Text;
 
+/// RPM's default priority value for `%filetrigger*` declarations when no
+/// `-P` is given.
+pub const DEFAULT_FILE_TRIGGER_PRIORITY: u32 = 100_000;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Scriptlet<T = ()> {
     pub kind:          ScriptletKind,
     pub subpkg:        Option<SubpkgRef>,
@@ -25,6 +32,7 @@ pub struct Scriptlet<T = ()> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum ScriptletKind {
     Pre,
     Post,
@@ -40,6 +48,7 @@ pub enum ScriptletKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Interpreter {
     /// `-p /bin/sh`, `-p /usr/bin/python3`, etc.
     Path(Text),
@@ -50,6 +59,7 @@ pub enum Interpreter {
 /// `%triggerprein` / `%triggerin` / `%triggerun` / `%triggerpostun`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Trigger<T = ()> {
     pub kind:       TriggerKind,
     pub subpkg:     Option<SubpkgRef>,
@@ -62,6 +72,7 @@ pub struct Trigger<T = ()> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum TriggerKind {
     Prein,
     In,
@@ -72,11 +83,13 @@ pub enum TriggerKind {
 /// File triggers (rpm ≥ 4.13). `Trans*` variants run once per transaction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct FileTrigger<T = ()> {
     pub kind:     FileTriggerKind,
     pub subpkg:   Option<SubpkgRef>,
     pub interp:   Option<Interpreter>,
-    /// `-P NN` — priority; defaults to 100 000 when unset.
+    /// `-P NN` — priority. When `None`, RPM defaults to
+    /// [`DEFAULT_FILE_TRIGGER_PRIORITY`]; higher values run earlier.
     pub priority: Option<u32>,
     /// Path prefixes written after `--`.
     pub prefixes: Vec<Text>,
@@ -86,6 +99,7 @@ pub struct FileTrigger<T = ()> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FileTriggerKind {
     In,
     Un,
