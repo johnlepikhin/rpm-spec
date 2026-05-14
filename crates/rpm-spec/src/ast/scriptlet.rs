@@ -1,0 +1,96 @@
+//! Scriptlets, triggers, and file triggers.
+//!
+//! See `man rpm-scriptlets` for runtime semantics.
+
+use super::deps::DepExpr;
+use super::section::{ShellBody, SubpkgRef};
+use super::text::Text;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Scriptlet<T = ()> {
+    pub kind:          ScriptletKind,
+    pub subpkg:        Option<SubpkgRef>,
+    /// `-p` — interpreter selection.
+    pub interp:        Option<Interpreter>,
+    /// `-e` — expand macros in the body before execution.
+    pub expand_macros: bool,
+    /// `-q` — quiet mode.
+    pub quiet:         bool,
+    /// `-f FILE` — body read from `FILE` instead of inline.
+    pub from_file:     Option<Text>,
+    pub body:          ShellBody,
+    pub data:          T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ScriptletKind {
+    Pre,
+    Post,
+    Preun,
+    Postun,
+    Pretrans,
+    Posttrans,
+    /// `%preuntrans` — rpm ≥ 4.19.
+    Preuntrans,
+    /// `%postuntrans` — rpm ≥ 4.19.
+    Postuntrans,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Interpreter {
+    /// `-p /bin/sh`, `-p /usr/bin/python3`, etc.
+    Path(Text),
+    /// `-p <lua>` — embedded Lua.
+    Lua,
+}
+
+/// `%triggerprein` / `%triggerin` / `%triggerun` / `%triggerpostun`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Trigger<T = ()> {
+    pub kind:       TriggerKind,
+    pub subpkg:     Option<SubpkgRef>,
+    pub interp:     Option<Interpreter>,
+    /// Conditions written after `--` and separated by commas.
+    pub conditions: Vec<DepExpr>,
+    pub body:       ShellBody,
+    pub data:       T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TriggerKind {
+    Prein,
+    In,
+    Un,
+    Postun,
+}
+
+/// File triggers (rpm ≥ 4.13). `Trans*` variants run once per transaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FileTrigger<T = ()> {
+    pub kind:     FileTriggerKind,
+    pub subpkg:   Option<SubpkgRef>,
+    pub interp:   Option<Interpreter>,
+    /// `-P NN` — priority; defaults to 100 000 when unset.
+    pub priority: Option<u32>,
+    /// Path prefixes written after `--`.
+    pub prefixes: Vec<Text>,
+    pub body:     ShellBody,
+    pub data:     T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FileTriggerKind {
+    In,
+    Un,
+    Postun,
+    TransIn,
+    TransUn,
+    TransPostun,
+}

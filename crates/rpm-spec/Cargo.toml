@@ -1,0 +1,24 @@
+[package]
+name        = "rpm-spec"
+version     = "0.1.0"
+description = "Parser and pretty-printer for RPM .spec files"
+keywords    = ["rpm", "spec", "parser", "printer", "packaging"]
+categories  = ["parser-implementations"]
+edition.workspace    = true
+license.workspace    = true
+repository.workspace = true
+authors.workspace    = true
+
+[features]
+default = ["parser", "printer"]
+parser  = ["dep:nom"]
+printer = ["dep:pretty"]
+serde   = ["dep:serde"]
+
+[dependencies]
+nom    = { workspace = true, optional = true }
+pretty = { workspace = true, optional = true }
+serde  = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

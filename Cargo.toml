@@ -1,0 +1,15 @@
+[workspace]
+members  = ["crates/rpm-spec"]
+resolver = "2"
+
+[workspace.package]
+edition    = "2024"
+license    = "MIT OR Apache-2.0"
+repository = "https://github.com/johnlepikhin/rpm-spec"
+authors    = ["Evgenii Lepikhin <johnlepikhin@gmail.com>"]
+
+[workspace.dependencies]
+nom    = { version = "8.0", default-features = false, features = ["alloc"] }
+pretty = { version = "0.12" }
+serde  = { version = "1.0", features = ["derive"] }
+pretty_assertions = "1"
