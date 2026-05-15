@@ -136,15 +136,72 @@ pub fn parse_text<'a>(
 /// On macro grammar failure, the whole body is preserved as a single
 /// literal — recovery is silent because [`parse_text`] already emits
 /// per-character warnings via the shared [`ParserState`].
+///
+/// `W_UNTERMINATED_MACRO` diagnostics emitted during **multi-line**
+/// body parsing are **dropped**: their spans are relative to the
+/// body's fresh [`Input`] cursor (not the source file), and the
+/// trigger is typically a legitimate idiom — a multi-line
+/// `%{?macro:body}` block whose body contains section-header-looking
+/// lines (`%post -n …`). `parse_text` can't follow the body across
+/// the section-header boundary, but `rpm` itself handles it
+/// correctly. Surfacing the warning would mislead users with a wrong
+/// location pointing at an unrelated line.
+///
+/// Single-line bodies still surface W0004 normally — that's the
+/// real-bug case like `Provides: %{` where an unterminated macro
+/// reference is exactly what the user needs to hear about. Other
+/// warning classes (stray `%`, empty macro name, builtin missing
+/// body) are always kept.
 pub fn parse_body_as_text(state: &ParserState, raw: &str) -> Text {
     if raw.is_empty() {
         return Text::new();
     }
+    // Recognise the open-ended `%{?NAME:` / `%{!?NAME:` conditional-
+    // with-body idiom split across shell-body lines. Real-world specs
+    // (e.g. gcc.spec wrapping ldconfig scriptlets) use:
+    //
+    //     %{?ldconfig:
+    //     %post -n libgcc -p <lua>
+    //     ...
+    //     }
+    //
+    // The shell-body parser calls `parse_body_as_text` per physical
+    // line, so we only ever see `"%{?ldconfig:"` here — a body with
+    // a colon but no matching `}`. `parse_braced_macro` correctly
+    // reports the unterminated reference, but the span is relative to
+    // the fresh `Input::new(raw)` and the user is told about a
+    // completely unrelated location. Suppress in this exact shape.
+    //
+    // We do NOT suppress for `%{` / `%{NAME` (no `:`), so legitimate
+    // truncations like `Provides: %{` still surface their W0004.
+    let suppress_unterminated = {
+        let t = raw.trim_start();
+        (t.starts_with("%{?") || t.starts_with("%{!?"))
+            && t.contains(':')
+            && !t.contains('}')
+    };
+    let before = state.diagnostics.borrow().len();
     let inp = Input::new(raw);
-    match parse_text(state, inp, &|_c| false) {
+    let result = match parse_text(state, inp, &|_c| false) {
         Ok((_rest, text)) => text,
         Err(_) => Text { segments: vec![TextSegment::Literal(raw.to_owned())] },
+    };
+    if suppress_unterminated {
+        // Two borrow scopes: the drain's `RefMut` must drop before
+        // the subsequent `extend` reborrows the cell.
+        let kept: Vec<_> = {
+            let mut diags = state.diagnostics.borrow_mut();
+            diags
+                .drain(before..)
+                .filter(|d| {
+                    d.code.as_deref()
+                        != Some(super::super::parse_result::codes::W_UNTERMINATED_MACRO)
+                })
+                .collect()
+        };
+        state.diagnostics.borrow_mut().extend(kept);
     }
+    result
 }
 
 fn flush_literal(buf: &mut String, segments: &mut Vec<TextSegment>) {
