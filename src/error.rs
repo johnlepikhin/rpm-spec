@@ -26,6 +26,11 @@ use crate::ast::Span;
 pub enum ParseError {
     /// I/O failure while reading source bytes. Reserved for future
     /// `parse_reader` / `parse_file` entry points.
+    // TODO(parser-TODO.md Stage 6): when `parse_reader`/`parse_file`
+    // land, carry richer I/O context here so callers can branch on
+    // `NotFound` vs `PermissionDenied` without string-matching. Note
+    // that the current `Clone + Eq` derives will need to be revisited
+    // (`std::io::Error` is neither).
     #[error("I/O error: {message}")]
     Io { message: String },
 }

@@ -73,16 +73,10 @@ pub fn parse_text<'a>(
         let mut chars = frag.chars();
         let next = chars.next();
 
-        let stop = match next {
-            None => true,
-            Some(c) => is_terminator(c) && c != '%',
-        };
-        if stop {
+        let Some(c) = next else { break };
+        if is_terminator(c) && c != '%' {
             break;
         }
-
-        // SAFETY of unwrap: `next` is `Some` because we did not break.
-        let c = next.unwrap();
 
         if c == '%' {
             // `%%` decodes to a single literal '%'.

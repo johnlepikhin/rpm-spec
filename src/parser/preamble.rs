@@ -418,13 +418,7 @@ fn build_preamble_items(
         TagKind::Dep => {
             let slices = split_dep_list(value_trim);
             if slices.is_empty() {
-                return vec![SpecItem::Preamble(PreambleItem {
-                    tag,
-                    qualifiers,
-                    lang,
-                    value: TagValue::Text(Text::new()),
-                    data: span,
-                })];
+                return empty_dep_item(tag, qualifiers, lang, span);
             }
             // Build dep expressions first, then assemble items. The
             // *final* item takes ownership of `tag`/`qualifiers`/`lang`;
@@ -435,13 +429,7 @@ fn build_preamble_items(
                 .filter_map(|slice| super::deps::parse_dep_expr(state, slice).ok())
                 .collect();
             if deps.is_empty() {
-                return vec![SpecItem::Preamble(PreambleItem {
-                    tag,
-                    qualifiers,
-                    lang,
-                    value: TagValue::Text(Text::new()),
-                    data: span,
-                })];
+                return empty_dep_item(tag, qualifiers, lang, span);
             }
             let mut items = Vec::with_capacity(deps.len());
             let mut iter = deps.into_iter().peekable();
@@ -534,6 +522,24 @@ fn build_preamble_items(
             })]
         }
     }
+}
+
+/// Build a single empty-value preamble item, consuming `tag` /
+/// `qualifiers` / `lang`. Used as the fallback when a dep-bearing tag
+/// has either no source tokens or no successfully parsed dep slices.
+fn empty_dep_item(
+    tag: Tag,
+    qualifiers: Vec<TagQualifier>,
+    lang: Option<String>,
+    span: Span,
+) -> Vec<SpecItem<Span>> {
+    vec![SpecItem::Preamble(PreambleItem {
+        tag,
+        qualifiers,
+        lang,
+        value: TagValue::Text(Text::new()),
+        data: span,
+    })]
 }
 
 /// Parse one item of a `%package` body. Returns `Vec` so multi-dep

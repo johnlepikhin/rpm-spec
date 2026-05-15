@@ -147,6 +147,11 @@ pub mod codes {
 
     /// A `%changelog` entry header (`* Weekday Month Day Year …`)
     /// could not be parsed.
+    ///
+    /// **Scope note:** this code fires only when the header is
+    /// structurally unparseable. A header that parses but carries an
+    /// implausible day-of-month or year is reported with
+    /// [`W_IMPLAUSIBLE_CHANGELOG_DATE`] instead.
     pub const W_MALFORMED_CHANGELOG_HEADER: &str = "rpmspec/W0023";
 
     /// A section name was recognised but no structural body parser
@@ -154,6 +159,13 @@ pub mod codes {
     /// placeholder comment. Currently unused (every section landed in
     /// Stage 3); retained for forward compatibility.
     pub const W_DEFERRED_SECTION: &str = "rpmspec/W0024";
+
+    /// A `%changelog` entry header parsed successfully but contains an
+    /// implausible date (day outside 1..=31 or year outside a
+    /// reasonable range). Distinct from
+    /// [`W_MALFORMED_CHANGELOG_HEADER`], which fires when the header
+    /// could not be parsed at all.
+    pub const W_IMPLAUSIBLE_CHANGELOG_DATE: &str = "rpmspec/W0025";
 }
 
 /// Outcome of parsing a `.spec` source.

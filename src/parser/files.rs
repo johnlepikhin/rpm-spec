@@ -375,9 +375,10 @@ fn parse_attr_field(state: &ParserState, raw: &str) -> AttrField {
     if trimmed == "-" {
         return AttrField::Default;
     }
-    if !trimmed.is_empty()
-        && trimmed.chars().all(|c| c.is_ascii_digit())
-    {
+    // `%attr` / `%defattr` modes are written in octal. Only digits 0..=7
+    // are valid; any 8 or 9 in the token means this is not a numeric
+    // mode (likely a user/group name like "user8").
+    if !trimmed.is_empty() && trimmed.bytes().all(|b| matches!(b, b'0'..=b'7')) {
         if let Ok(n) = u32::from_str_radix(trimmed, 8) {
             if n > MAX_FILE_MODE {
                 state.push_warning_code(

@@ -33,8 +33,12 @@ pub struct ChangelogEntry<T = ()> {
 
 /// A date as it appears in a `%changelog` header.
 ///
-/// Range validation (`day` in 1..=31, plausible `year`) is the parser's
-/// job; this struct holds whatever the source provided.
+/// The type is *permissive*: implausible values (e.g. `day=99`,
+/// `year=1500`) are accepted by the parser and stored verbatim; the
+/// parser only emits a
+/// [`crate::parse_result::codes::W_IMPLAUSIBLE_CHANGELOG_DATE`]
+/// diagnostic. Consumers that need a calendrically valid date should
+/// re-check the fields when reading the AST.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]

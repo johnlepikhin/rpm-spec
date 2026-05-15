@@ -88,10 +88,11 @@ pub struct AttrFields {
 
 /// A single field inside `%defattr(...)` or `%attr(...)`.
 ///
-/// The numeric variant stores a UNIX file mode. Valid RPM values fall in
-/// `0..=0o7777`; this is not currently enforced at the type level, so
-/// downstream parsers should validate the range and emit a
-/// [`crate::parse_result::Diagnostic`] for out-of-range inputs.
+/// The type is *permissive*: an [`AttrField::Numeric`] value may exceed
+/// the conventional `0..=0o7777` range, in which case the parser emits
+/// a [`crate::parse_result::codes::W_INVALID_NUMBER`] diagnostic but
+/// still preserves the original bytes verbatim. Consumers that need a
+/// validated mode should re-check the range when reading the AST.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]

@@ -38,11 +38,37 @@ fn deeply_nested_rich_dep() {
         },
         _ => panic!(),
     };
-    // Outermost is Without.
-    match dep {
-        DepExpr::Rich(b) => assert!(matches!(b.as_ref(), BoolDep::Without { .. })),
-        _ => panic!("expected Rich"),
-    }
+
+    // Walk all four BoolDep levels: Without → With → Or → And → atoms.
+    let outer = match dep {
+        DepExpr::Rich(b) => b.as_ref(),
+        _ => panic!("expected Rich at level 1"),
+    };
+    let lvl_with = match outer {
+        BoolDep::Without { left, .. } => match left.as_ref() {
+            DepExpr::Rich(b) => b.as_ref(),
+            _ => panic!("level 2: expected Rich under Without.left"),
+        },
+        _ => panic!("level 1: expected Without"),
+    };
+    let lvl_or = match lvl_with {
+        BoolDep::With(operands) => match operands.first() {
+            Some(DepExpr::Rich(b)) => b.as_ref(),
+            _ => panic!("level 3: expected Rich as first With operand"),
+        },
+        _ => panic!("level 2: expected With"),
+    };
+    let lvl_and = match lvl_or {
+        BoolDep::Or(operands) => match operands.first() {
+            Some(DepExpr::Rich(b)) => b.as_ref(),
+            _ => panic!("level 4: expected Rich as first Or operand"),
+        },
+        _ => panic!("level 3: expected Or"),
+    };
+    assert!(
+        matches!(lvl_and, BoolDep::And(_)),
+        "level 4: expected And, got {lvl_and:?}"
+    );
 }
 
 #[test]
@@ -55,7 +81,17 @@ fn long_input_completes() {
     }
     src.push_str("%description\nbody\n");
 
+    let start = std::time::Instant::now();
     let r = parse_str(&src);
+    let elapsed = start.elapsed();
+
+    // Guard against O(N^2) regressions: 5k lines must parse in well under 5s
+    // even on slow CI runners. A single-digit-ms baseline is typical.
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "parse took {elapsed:?}, suspect O(N^2) regression"
+    );
+
     let req_count = r
         .spec
         .items
@@ -95,9 +131,10 @@ fn file_mode_boundary_warning() {
     let ok_src = "%files\n%attr(7777,root,root) /usr/bin/x\n";
     let r_ok = parse_str(ok_src);
     assert!(
-        !r_ok.diagnostics
+        !r_ok
+            .diagnostics
             .iter()
-            .any(|d| d.message.contains("exceeds 0o7777")),
+            .any(|d| d.code.as_deref() == Some("rpmspec/W0018")),
         "{:?}",
         r_ok.diagnostics
     );
@@ -109,7 +146,7 @@ fn file_mode_boundary_warning() {
         r_bad
             .diagnostics
             .iter()
-            .any(|d| d.message.contains("exceeds 0o7777")),
+            .any(|d| d.code.as_deref() == Some("rpmspec/W0018")),
         "{:?}",
         r_bad.diagnostics
     );
@@ -122,7 +159,7 @@ fn implausible_changelog_year_warning() {
     assert!(
         r.diagnostics
             .iter()
-            .any(|d| d.message.contains("implausible")),
+            .any(|d| d.code.as_deref() == Some("rpmspec/W0025")),
         "{:?}",
         r.diagnostics
     );
@@ -135,7 +172,7 @@ fn invalid_day_changelog_warning() {
     assert!(
         r.diagnostics
             .iter()
-            .any(|d| d.message.contains("out of range")),
+            .any(|d| d.code.as_deref() == Some("rpmspec/W0025")),
         "{:?}",
         r.diagnostics
     );
@@ -143,7 +180,7 @@ fn invalid_day_changelog_warning() {
 
 #[test]
 fn long_define_continuation_chain() {
-    // 30 continuation lines.
+    // 30 segments joined by 29 `\` continuations.
     let mut body = String::new();
     body.push_str("%define long ");
     for i in 0..30 {

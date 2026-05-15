@@ -190,10 +190,15 @@ fn parse_top_level_item<'a>(
 /// not including) the next section header. Used as a fallback for
 /// section names whose structural parsing has not landed yet (Stage 3).
 fn swallow_section_body(input: Input<'_>) -> (Input<'_>, ()) {
-    let (mut cursor, _) = match line_terminator(input).or_else(|_| {
-        physical_line(input).map(|(r, _)| (r, ()))
-    }) {
-        Ok((r, _)) => (r, ()),
+    // Skip the header line: prefer a clean `line_terminator` (trailing
+    // whitespace + EOL), fall back to consuming the rest of the
+    // physical line if the header is followed by junk before the EOL.
+    let mut skip_header = nom::branch::alt((
+        nom::combinator::map(line_terminator, |()| ()),
+        nom::combinator::map(physical_line, |_| ()),
+    ));
+    let mut cursor = match nom::Parser::parse(&mut skip_header, input) {
+        Ok((rest, ())) => rest,
         Err(_) => return (input, ()),
     };
     while !cursor.fragment().is_empty() {

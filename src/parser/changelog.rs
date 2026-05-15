@@ -138,10 +138,12 @@ pub fn parse_changelog_entry<'a>(
         advance(after_ws, 1).ok_or_else(|| nom::Err::Error(error_position!(input, ErrorKind::Tag)))?;
     let (after_star_ws, _) = space0(after_star)?;
 
+    let header_start = after_star_ws;
     let (after_header_line, header_input) = physical_line(after_star_ws)?;
+    let header_span = span_between(&header_start, &after_header_line);
 
     let header_text = header_input.fragment();
-    let (date, author, email, version) = parse_header_text(state, header_text)
+    let (date, author, email, version) = parse_header_text(state, header_text, header_span)
         .ok_or_else(|| nom::Err::Error(error_position!(input, ErrorKind::Tag)))?;
 
     // Collect body lines.
@@ -187,9 +189,22 @@ pub fn parse_changelog_entry<'a>(
 // Header parsing helpers
 // ---------------------------------------------------------------------
 
+/// Lower bound of the plausible-year range for `%changelog` entries.
+///
+/// We trust the Unix epoch year (1970) as the floor: package
+/// maintainers occasionally backdate entries, and rounding to 1970
+/// keeps the rule easy to remember. Anything earlier is almost
+/// certainly a typo.
+const MIN_PLAUSIBLE_YEAR: u16 = 1970;
+/// Upper bound of the plausible-year range; paired with
+/// [`MIN_PLAUSIBLE_YEAR`]. Picked as a far-future sentinel — bump it
+/// if RPM is still in use in the 23rd century.
+const MAX_PLAUSIBLE_YEAR: u16 = 2200;
+
 fn parse_header_text(
     state: &ParserState,
     header: &str,
+    header_span: Span,
 ) -> Option<(ChangelogDate, Text, Option<Text>, Option<Text>)> {
     // Tokens: Weekday Month Day Year ...
     let mut tokens = header.split_whitespace();
@@ -200,16 +215,19 @@ fn parse_header_text(
 
     if !(1..=31).contains(&day) {
         state.push_warning_code(
-            codes::W_MALFORMED_CHANGELOG_HEADER,
+            codes::W_IMPLAUSIBLE_CHANGELOG_DATE,
             format!("day-of-month `{day}` is out of range 1..=31"),
-            None,
+            Some(header_span),
         );
     }
-    if !(1970..=2200).contains(&year) {
+    if !(MIN_PLAUSIBLE_YEAR..=MAX_PLAUSIBLE_YEAR).contains(&year) {
         state.push_warning_code(
-            codes::W_MALFORMED_CHANGELOG_HEADER,
-            format!("year `{year}` is implausible (expected 1970..=2200)"),
-            None,
+            codes::W_IMPLAUSIBLE_CHANGELOG_DATE,
+            format!(
+                "year `{year}` is implausible (expected \
+                 {MIN_PLAUSIBLE_YEAR}..={MAX_PLAUSIBLE_YEAR})"
+            ),
+            Some(header_span),
         );
     }
 

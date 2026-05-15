@@ -30,6 +30,21 @@ impl ParserConfig {
 /// `ParserState` is passed by shared reference into every sub-parser.
 /// Diagnostics live behind `RefCell` so combinator chains can append
 /// findings without needing `&mut` propagation.
+///
+/// # Thread safety
+///
+/// `ParserState` is neither [`Send`] nor [`Sync`] — both are
+/// inherited-not-implemented because the inner `Rc<RefCell<...>>` is
+/// itself single-threaded. To parse multiple specs in parallel,
+/// create a fresh state per thread:
+///
+/// ```ignore
+/// use rpm_spec::parser::parse_str;
+/// let specs: Vec<&str> = vec![/* ... */];
+/// // `parse_str` allocates a brand-new ParserState per call, so each
+/// // thread gets its own.
+/// let results: Vec<_> = specs.iter().map(|s| parse_str(s)).collect();
+/// ```
 #[derive(Debug, Clone)]
 pub struct ParserState {
     pub config:      Rc<ParserConfig>,
