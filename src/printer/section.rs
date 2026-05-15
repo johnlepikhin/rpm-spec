@@ -4,13 +4,13 @@ use crate::ast::{
     BuildScriptKind, PackageName, PreambleContent, Section, ShellBody, SubpkgRef, Text, TextBody,
 };
 
-use super::Printer;
 use super::changelog::print_section_changelog;
 use super::files::print_files_section;
 use super::preamble::print_preamble_content;
 use super::scriptlet::{print_file_trigger, print_scriptlet, print_trigger};
-use super::text::print_text;
+use super::text::{print_body_literal_escaped, print_text};
 use super::util::print_subpkg;
+use super::{Printer, TokenKind};
 
 pub(crate) fn print_section<T>(p: &mut Printer<'_>, section: &Section<T>) {
     match section {
@@ -37,12 +37,12 @@ pub(crate) fn print_section<T>(p: &mut Printer<'_>, section: &Section<T>) {
 
 fn print_description(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &TextBody) {
     p.write_indent();
-    p.raw("%description");
+    p.emit(TokenKind::SectionKeyword, "%description");
     print_subpkg(p, subpkg);
     p.newline();
     for line in &body.lines {
         p.write_indent();
-        print_text(p, line);
+        print_body_literal_escaped(p, line, TokenKind::TextBody);
         p.newline();
     }
 }
@@ -53,7 +53,7 @@ fn print_description(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &Tex
 
 fn print_package<T>(p: &mut Printer<'_>, name: &PackageName, content: &[PreambleContent<T>]) {
     p.write_indent();
-    p.raw("%package");
+    p.emit(TokenKind::SectionKeyword, "%package");
     match name {
         PackageName::Absolute(t) => {
             p.raw(" -n ");
@@ -76,7 +76,7 @@ fn print_package<T>(p: &mut Printer<'_>, name: &PackageName, content: &[Preamble
 
 fn print_build_script(p: &mut Printer<'_>, kind: BuildScriptKind, body: &ShellBody) {
     p.write_indent();
-    p.raw(build_script_keyword(kind));
+    p.emit(TokenKind::SectionKeyword, build_script_keyword(kind));
     p.newline();
     print_shell_body(p, body);
 }
@@ -99,7 +99,7 @@ fn build_script_keyword(k: BuildScriptKind) -> &'static str {
 
 fn print_verify_section(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &ShellBody) {
     p.write_indent();
-    p.raw("%verify");
+    p.emit(TokenKind::SectionKeyword, "%verify");
     print_subpkg(p, subpkg);
     p.newline();
     print_shell_body(p, body);
@@ -107,7 +107,7 @@ fn print_verify_section(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &
 
 fn print_sepolicy(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &ShellBody) {
     p.write_indent();
-    p.raw("%sepolicy");
+    p.emit(TokenKind::SectionKeyword, "%sepolicy");
     print_subpkg(p, subpkg);
     p.newline();
     print_shell_body(p, body);
@@ -119,7 +119,7 @@ fn print_sepolicy(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &ShellB
 
 fn print_list_section(p: &mut Printer<'_>, keyword: &str, entries: &[Text]) {
     p.write_indent();
-    p.raw(keyword);
+    p.emit(TokenKind::SectionKeyword, keyword);
     p.newline();
     for entry in entries {
         p.write_indent();
@@ -135,7 +135,7 @@ fn print_list_section(p: &mut Printer<'_>, keyword: &str, entries: &[Text]) {
 fn print_shell_body(p: &mut Printer<'_>, body: &ShellBody) {
     for line in &body.lines {
         p.write_indent();
-        print_text(p, line);
+        print_body_literal_escaped(p, line, TokenKind::ShellBody);
         p.newline();
     }
 }

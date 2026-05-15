@@ -2,9 +2,9 @@
 
 use crate::ast::{CondExpr, CondKind, Conditional, Text, TextSegment};
 
-use super::Printer;
 use super::expr::print_expr_ast;
 use super::text::{print_macro_ref, print_text};
+use super::{Printer, TokenKind};
 
 /// Render a [`Conditional`] block. `body_printer` is called for every
 /// body item; callers pass the appropriate `print_*_content` function
@@ -31,7 +31,7 @@ pub(crate) fn print_conditional<T, Body, F>(
     }
     if let Some(body) = &c.otherwise {
         p.write_indent();
-        p.raw("%else");
+        p.emit(TokenKind::ConditionalKeyword, "%else");
         p.newline();
         p.nested(|p| {
             for item in body {
@@ -40,13 +40,13 @@ pub(crate) fn print_conditional<T, Body, F>(
         });
     }
     p.write_indent();
-    p.raw("%endif");
+    p.emit(TokenKind::ConditionalKeyword, "%endif");
     p.newline();
 }
 
 fn emit_branch_head<T>(p: &mut Printer<'_>, kw: &str, expr: &CondExpr<T>) {
     p.write_indent();
-    p.raw(kw);
+    p.emit(TokenKind::ConditionalKeyword, kw);
     match expr {
         CondExpr::Raw(t) => {
             if !is_empty_text(t) {

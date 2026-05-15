@@ -2,13 +2,36 @@
 
 use crate::ast::{BuiltinMacro, ConditionalMacro, MacroKind, MacroRef, Text, TextSegment};
 
-use super::Printer;
+use super::{Printer, TokenKind};
 
 /// Render a `Text` to the printer, escaping literal `%` to `%%`.
 pub(crate) fn print_text(p: &mut Printer<'_>, t: &Text) {
     for seg in &t.segments {
         match seg {
             TextSegment::Literal(s) => print_literal_escaped(p, s),
+            TextSegment::Macro(m) => print_macro_ref(p, m),
+        }
+    }
+}
+
+/// Emit a [`Text`] as a literal body line: every `TextSegment::Literal`
+/// is `%`-escaped (`%` -> `%%`) and emitted under `kind`; every
+/// `TextSegment::Macro` is forwarded to [`print_macro_ref`] which
+/// classifies macro references on its own.
+///
+/// Used by the body-rendering paths in `%changelog`, `%description`,
+/// and shell-script sections to keep escape logic in one place.
+pub(crate) fn print_body_literal_escaped(
+    p: &mut super::Printer<'_>,
+    t: &crate::ast::Text,
+    kind: super::TokenKind,
+) {
+    use crate::ast::TextSegment;
+    for seg in &t.segments {
+        match seg {
+            TextSegment::Literal(s) => {
+                p.emit(kind, &s.replace('%', "%%"));
+            }
             TextSegment::Macro(m) => print_macro_ref(p, m),
         }
     }
@@ -27,10 +50,31 @@ pub(crate) fn print_literal_escaped(p: &mut Printer<'_>, s: &str) {
     }
 }
 
-/// Render a [`MacroRef`] with the leading `%` sigil.
+/// Render a [`MacroRef`] with the leading `%` sigil, emitting the
+/// whole reference under a single category token so consumers can
+/// colour it uniformly. The inner structure is rendered to a side
+/// buffer (without classification, since `String: PrintWriter`
+/// concatenates) and then passed up as one chunk.
 pub(crate) fn print_macro_ref(p: &mut Printer<'_>, m: &MacroRef) {
-    p.raw_char('%');
-    print_macro_ref_no_percent(p, m);
+    let kind = macro_kind_token(&m.kind);
+    let mut buf = String::new();
+    {
+        let mut tmp = Printer::new(&mut buf, p.cfg());
+        tmp.raw_char('%');
+        print_macro_ref_no_percent(&mut tmp, m);
+    }
+    p.emit(kind, &buf);
+}
+
+/// Map a [`MacroKind`] to the printer's [`TokenKind`] for highlighting.
+fn macro_kind_token(kind: &MacroKind) -> TokenKind {
+    match kind {
+        MacroKind::Shell => TokenKind::ShellMacro,
+        MacroKind::Expr | MacroKind::Lua => TokenKind::ExprMacro,
+        // `Plain` / `Braced` / `Parametric` / `Builtin` are ordinary
+        // macro references; treat them all under `MacroRef`.
+        _ => TokenKind::MacroRef,
+    }
 }
 
 /// Render a macro reference body assuming the leading `%` has already

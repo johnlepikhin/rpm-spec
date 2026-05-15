@@ -5,7 +5,7 @@ use crate::ast::{
     FilesContent, SubpkgRef, Text, VerifyCheck,
 };
 
-use super::Printer;
+use super::{Printer, TokenKind};
 use super::cond::print_conditional;
 use super::macros::print_comment;
 use super::text::print_text;
@@ -20,7 +20,7 @@ pub(crate) fn print_files_section<T>(
     content: &[FilesContent<T>],
 ) {
     p.write_indent();
-    p.raw("%files");
+    p.emit(TokenKind::SectionKeyword, "%files");
     print_subpkg(p, subpkg);
     for fl in file_lists {
         p.raw(" -f ");
@@ -64,29 +64,32 @@ fn print_directive(p: &mut Printer<'_>, d: &FileDirective) {
     match d {
         FileDirective::Defattr(f) => print_defattr(p, f),
         FileDirective::Attr(f) => print_attr(p, f),
-        FileDirective::Dir => p.raw("%dir"),
-        FileDirective::Doc => p.raw("%doc"),
-        FileDirective::License => p.raw("%license"),
+        FileDirective::Dir => p.emit(TokenKind::MacroRef, "%dir"),
+        FileDirective::Doc => p.emit(TokenKind::MacroRef, "%doc"),
+        FileDirective::License => p.emit(TokenKind::MacroRef, "%license"),
         FileDirective::Config(flags) => print_config(p, flags),
-        FileDirective::Ghost => p.raw("%ghost"),
+        FileDirective::Ghost => p.emit(TokenKind::MacroRef, "%ghost"),
         FileDirective::Verify { negate, checks } => print_verify(p, *negate, checks),
         FileDirective::Lang(loc) => {
-            p.raw("%lang(");
+            p.emit(TokenKind::MacroRef, "%lang");
+            p.raw("(");
             print_text(p, loc);
             p.raw_char(')');
         }
         FileDirective::Caps(spec) => {
-            p.raw("%caps(");
+            p.emit(TokenKind::MacroRef, "%caps");
+            p.raw("(");
             print_text(p, spec);
             p.raw_char(')');
         }
-        FileDirective::Artifact => p.raw("%artifact"),
-        FileDirective::MissingOk => p.raw("%missingok"),
+        FileDirective::Artifact => p.emit(TokenKind::MacroRef, "%artifact"),
+        FileDirective::MissingOk => p.emit(TokenKind::MacroRef, "%missingok"),
     }
 }
 
 fn print_defattr(p: &mut Printer<'_>, f: &DefattrFields) {
-    p.raw("%defattr(");
+    p.emit(TokenKind::MacroRef, "%defattr");
+    p.raw("(");
     print_attr_field(p, &f.fmode);
     p.raw_char(',');
     print_attr_field(p, &f.user);
@@ -100,7 +103,8 @@ fn print_defattr(p: &mut Printer<'_>, f: &DefattrFields) {
 }
 
 fn print_attr(p: &mut Printer<'_>, f: &AttrFields) {
-    p.raw("%attr(");
+    p.emit(TokenKind::MacroRef, "%attr");
+    p.raw("(");
     print_attr_field(p, &f.mode);
     p.raw_char(',');
     print_attr_field(p, &f.user);
@@ -119,10 +123,11 @@ fn print_attr_field(p: &mut Printer<'_>, a: &AttrField) {
 
 fn print_config(p: &mut Printer<'_>, flags: &[ConfigFlag]) {
     if flags.is_empty() {
-        p.raw("%config");
+        p.emit(TokenKind::MacroRef, "%config");
         return;
     }
-    p.raw("%config(");
+    p.emit(TokenKind::MacroRef, "%config");
+    p.raw("(");
     for (i, f) in flags.iter().enumerate() {
         if i > 0 {
             p.raw_char(',');
@@ -140,7 +145,8 @@ fn config_flag_name(f: ConfigFlag) -> &'static str {
 }
 
 fn print_verify(p: &mut Printer<'_>, negate: bool, checks: &[VerifyCheck]) {
-    p.raw("%verify(");
+    p.emit(TokenKind::MacroRef, "%verify");
+    p.raw("(");
     let mut first = true;
     if negate {
         p.raw("not");

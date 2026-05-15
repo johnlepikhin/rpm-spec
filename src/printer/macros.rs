@@ -5,8 +5,8 @@ use crate::ast::{
     MacroDefKind, Text, TextSegment,
 };
 
-use super::Printer;
 use super::text::print_text;
+use super::{Printer, TokenKind};
 
 pub(crate) fn print_macro_def<T>(p: &mut Printer<'_>, m: &MacroDef<T>) {
     p.write_indent();
@@ -15,11 +15,11 @@ pub(crate) fn print_macro_def<T>(p: &mut Printer<'_>, m: &MacroDef<T>) {
         MacroDefKind::Global => "%global",
         MacroDefKind::Undefine => "%undefine",
     };
-    p.raw(kw);
+    p.emit(TokenKind::MacroDefKeyword, kw);
     p.raw_char(' ');
-    p.raw(&m.name);
+    p.emit(TokenKind::MacroRef, &m.name);
     if let Some(opts) = &m.opts {
-        p.raw(opts);
+        p.emit(TokenKind::Flag, opts);
     }
     if matches!(m.kind, MacroDefKind::Undefine) {
         // No body for %undefine.
@@ -75,9 +75,9 @@ pub(crate) fn print_build_condition<T>(p: &mut Printer<'_>, b: &BuildCondition<T
         BuildCondStyle::BcondWith => "%bcond_with",
         BuildCondStyle::BcondWithout => "%bcond_without",
     };
-    p.raw(kw);
+    p.emit(TokenKind::MacroDefKeyword, kw);
     p.raw_char(' ');
-    p.raw(&b.name);
+    p.emit(TokenKind::MacroRef, &b.name);
     if let Some(default) = &b.default {
         p.raw_char(' ');
         print_text(p, default);
@@ -87,24 +87,31 @@ pub(crate) fn print_build_condition<T>(p: &mut Printer<'_>, b: &BuildCondition<T
 
 pub(crate) fn print_include<T>(p: &mut Printer<'_>, i: &IncludeDirective<T>) {
     p.write_indent();
-    p.raw("%include ");
+    p.emit(TokenKind::MacroDefKeyword, "%include");
+    p.raw_char(' ');
     print_text(p, &i.path);
     p.newline();
 }
 
 pub(crate) fn print_comment<T>(p: &mut Printer<'_>, c: &Comment<T>) {
     p.write_indent();
-    match c.style {
-        CommentStyle::Hash => p.raw_char('#'),
-        CommentStyle::Dnl => p.raw("%dnl"),
-    }
+    // Hash-style comments are pure plain text; `%dnl` is a comment
+    // directive but historically rendered uniformly under `Comment`.
+    let prefix = match c.style {
+        CommentStyle::Hash => "#",
+        CommentStyle::Dnl => "%dnl",
+    };
+    p.emit(TokenKind::Comment, prefix);
     if !is_empty_text(&c.text) {
-        p.raw_char(' ');
-        // Note: `#` and `%dnl` comments may contain a `%` that should
-        // remain literal (rpm only expands `#` comments — but printer
-        // mirrors source byte-for-byte after parser already decoded
-        // `%%` → `%`). For safety we escape on the same rule as Text.
-        print_text(p, &c.text);
+        // Inline the comment body as plain text inside the Comment
+        // token so consumers can colour the whole line uniformly.
+        let mut buf = String::new();
+        {
+            let mut tmp = Printer::new(&mut buf, p.cfg());
+            tmp.raw_char(' ');
+            print_text(&mut tmp, &c.text);
+        }
+        p.emit(TokenKind::Comment, &buf);
     }
     p.newline();
 }

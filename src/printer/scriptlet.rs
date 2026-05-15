@@ -4,14 +4,14 @@ use crate::ast::{
     FileTrigger, FileTriggerKind, Interpreter, Scriptlet, ScriptletKind, Trigger, TriggerKind,
 };
 
-use super::Printer;
+use super::{Printer, TokenKind};
 use super::deps::print_dep_expr;
 use super::text::print_text;
 use super::util::print_subpkg;
 
 pub(crate) fn print_scriptlet<T>(p: &mut Printer<'_>, s: &Scriptlet<T>) {
     p.write_indent();
-    p.raw(scriptlet_keyword(s.kind));
+    p.emit(TokenKind::SectionKeyword, scriptlet_keyword(s.kind));
     print_subpkg(p, s.subpkg.as_ref());
     print_interp(p, s.interp.as_ref());
     if s.expand_macros {
@@ -30,7 +30,7 @@ pub(crate) fn print_scriptlet<T>(p: &mut Printer<'_>, s: &Scriptlet<T>) {
 
 pub(crate) fn print_trigger<T>(p: &mut Printer<'_>, t: &Trigger<T>) {
     p.write_indent();
-    p.raw(trigger_keyword(t.kind));
+    p.emit(TokenKind::SectionKeyword, trigger_keyword(t.kind));
     print_subpkg(p, t.subpkg.as_ref());
     print_interp(p, t.interp.as_ref());
     if !t.conditions.is_empty() {
@@ -50,7 +50,7 @@ pub(crate) fn print_trigger<T>(p: &mut Printer<'_>, t: &Trigger<T>) {
 
 pub(crate) fn print_file_trigger<T>(p: &mut Printer<'_>, ft: &FileTrigger<T>) {
     p.write_indent();
-    p.raw(file_trigger_keyword(ft.kind));
+    p.emit(TokenKind::SectionKeyword, file_trigger_keyword(ft.kind));
     print_subpkg(p, ft.subpkg.as_ref());
     print_interp(p, ft.interp.as_ref());
     if let Some(prio) = ft.priority {

@@ -2,12 +2,14 @@
 
 use crate::ast::{ChangelogEntry, Month, Weekday};
 
-use super::Printer;
-use super::text::print_text;
+use super::text::{print_body_literal_escaped, print_text};
+use super::{Printer, TokenKind};
 
 /// Render a `Section::Changelog` body (header line + entries).
 pub(crate) fn print_changelog<T>(p: &mut Printer<'_>, entries: &[ChangelogEntry<T>]) {
-    p.line("%changelog");
+    p.write_indent();
+    p.emit(TokenKind::SectionKeyword, "%changelog");
+    p.newline();
     for (i, entry) in entries.iter().enumerate() {
         if i > 0 {
             p.newline();
@@ -18,31 +20,34 @@ pub(crate) fn print_changelog<T>(p: &mut Printer<'_>, entries: &[ChangelogEntry<
 
 fn print_entry<T>(p: &mut Printer<'_>, e: &ChangelogEntry<T>) {
     p.write_indent();
-    p.raw_char('*');
-    p.raw_char(' ');
-    p.raw(weekday_str(e.date.weekday));
-    p.raw_char(' ');
-    p.raw(month_str(e.date.month));
-    p.raw_char(' ');
-    p.raw(&format!("{:02}", e.date.day));
-    p.raw_char(' ');
-    p.raw(&e.date.year.to_string());
-    p.raw_char(' ');
+    // Header prefix: "* Wed May 14 2025 " is a single classified
+    // chunk — the date/weekday parts have no internal markup worth
+    // tokenizing individually.
+    let prefix = format!(
+        "* {wd} {mo} {day:02} {year} ",
+        wd = weekday_str(e.date.weekday),
+        mo = month_str(e.date.month),
+        day = e.date.day,
+        year = e.date.year,
+    );
+    p.emit(TokenKind::ChangelogHeader, &prefix);
+    // Author / email / version may contain macro references — let
+    // `print_text` route them through their own tokens. Static
+    // surrounding punctuation stays under ChangelogHeader.
     print_text(p, &e.author);
     if let Some(email) = &e.email {
-        p.raw_char(' ');
-        p.raw_char('<');
+        p.emit(TokenKind::ChangelogHeader, " <");
         print_text(p, email);
-        p.raw_char('>');
+        p.emit(TokenKind::ChangelogHeader, ">");
     }
     if let Some(version) = &e.version {
-        p.raw(" - ");
+        p.emit(TokenKind::ChangelogHeader, " - ");
         print_text(p, version);
     }
     p.newline();
     for line in &e.body {
         p.write_indent();
-        print_text(p, line);
+        print_body_literal_escaped(p, line, TokenKind::TextBody);
         p.newline();
     }
 }

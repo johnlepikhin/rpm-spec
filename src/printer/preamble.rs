@@ -5,22 +5,24 @@ use crate::ast::{PreambleContent, PreambleItem, Tag, TagQualifier, TagValue};
 #[cfg(test)]
 use crate::ast::Text;
 
-use super::Printer;
 use super::cond::print_conditional;
 use super::deps::print_dep_expr;
 use super::macros::print_comment;
 use super::text::print_text;
+use super::{Printer, TokenKind};
 
 pub(crate) fn print_preamble_item<T>(p: &mut Printer<'_>, item: &PreambleItem<T>) {
     p.write_indent();
 
-    // Build the `Tag(qualifier):` (or `Tag(lang):` / `Tag:`) prefix.
-    let prefix = tag_prefix(&item.tag, &item.qualifiers, item.lang.as_deref());
-    p.raw(&prefix);
+    // Render the `Tag(qualifier):` (or `Tag(lang):` / `Tag:`) prefix
+    // with categorized tokens. We compute the length up front so that
+    // value alignment doesn't depend on emit-time side effects.
+    let prefix_len = tag_prefix_len(&item.tag, &item.qualifiers, item.lang.as_deref());
+    emit_tag_prefix(p, &item.tag, &item.qualifiers, item.lang.as_deref());
 
     let column_after_prefix = p.cfg().preamble_value_column.map(|target| {
-        if prefix.len() < target {
-            target - prefix.len()
+        if prefix_len < target {
+            target - prefix_len
         } else {
             1
         }
@@ -34,6 +36,46 @@ pub(crate) fn print_preamble_item<T>(p: &mut Printer<'_>, item: &PreambleItem<T>
     p.newline();
 }
 
+fn emit_tag_prefix(
+    p: &mut Printer<'_>,
+    tag: &Tag,
+    qualifiers: &[TagQualifier],
+    lang: Option<&str>,
+) {
+    p.emit(TokenKind::TagName, &tag_name(tag));
+    if !qualifiers.is_empty() {
+        p.raw("(");
+        for (i, q) in qualifiers.iter().enumerate() {
+            if i > 0 {
+                p.raw(",");
+            }
+            p.emit(TokenKind::TagQualifier, qualifier_name(q));
+        }
+        p.raw(")");
+    } else if let Some(l) = lang {
+        p.raw("(");
+        p.emit(TokenKind::TagQualifier, l);
+        p.raw(")");
+    }
+    p.raw(":");
+}
+
+fn tag_prefix_len(tag: &Tag, qualifiers: &[TagQualifier], lang: Option<&str>) -> usize {
+    let mut n = tag_name(tag).len();
+    if !qualifiers.is_empty() {
+        n += 2; // ( )
+        for (i, q) in qualifiers.iter().enumerate() {
+            if i > 0 {
+                n += 1; // ,
+            }
+            n += qualifier_name(q).len();
+        }
+    } else if let Some(l) = lang {
+        n += 2 + l.len(); // (lang)
+    }
+    n + 1 // colon
+}
+
 pub(crate) fn print_preamble_content<T>(p: &mut Printer<'_>, c: &PreambleContent<T>) {
     match c {
         PreambleContent::Item(it) => print_preamble_item(p, it),
@@ -43,27 +85,6 @@ pub(crate) fn print_preamble_content<T>(p: &mut Printer<'_>, c: &PreambleContent
         PreambleContent::Comment(cm) => print_comment(p, cm),
         PreambleContent::Blank => p.newline(),
     }
-}
-
-fn tag_prefix(tag: &Tag, qualifiers: &[TagQualifier], lang: Option<&str>) -> String {
-    let mut out = String::new();
-    out.push_str(&tag_name(tag));
-    if !qualifiers.is_empty() {
-        out.push('(');
-        for (i, q) in qualifiers.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            out.push_str(qualifier_name(q));
-        }
-        out.push(')');
-    } else if let Some(l) = lang {
-        out.push('(');
-        out.push_str(l);
-        out.push(')');
-    }
-    out.push(':');
-    out
 }
 
 fn tag_name(tag: &Tag) -> String {

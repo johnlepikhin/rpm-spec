@@ -7,7 +7,7 @@
 
 use rpm_spec::ast::SpecFile;
 use rpm_spec::parser::parse_str;
-use rpm_spec::printer::{PrinterConfig, print, print_with};
+use rpm_spec::printer::{PrintWriter, PrinterConfig, TokenKind, print, print_to, print_with};
 
 const CANONICAL: &str = "\
 Name:           hello
@@ -268,4 +268,182 @@ fn percent_in_literal_is_double_escaped() {
     );
     let ast2 = parse_to_unit(&printed);
     assert_eq!(ast1, ast2);
+}
+
+/// `PrintWriter` consumers that classify tokens (e.g. ANSI highlighters
+/// in downstream CLIs) must produce output that is byte-identical to
+/// the default `String` writer once their categorization is dropped.
+/// Any deviation would break round-trip — this guards against future
+/// drift in how individual tokens are emitted.
+#[derive(Default)]
+struct CapturingWriter {
+    /// All chunks emitted, with their classification.
+    chunks: Vec<(TokenKind, String)>,
+}
+
+impl PrintWriter for CapturingWriter {
+    fn emit(&mut self, kind: TokenKind, text: &str) {
+        self.chunks.push((kind, text.to_string()));
+    }
+}
+
+#[test]
+fn classified_writer_concatenates_to_plain_print() {
+    let ast = parse_to_unit(CANONICAL);
+    let plain = print(&ast);
+    let mut capturing = CapturingWriter::default();
+    print_to(&ast, &PrinterConfig::default(), &mut capturing);
+    let reconstructed: String = capturing
+        .chunks
+        .iter()
+        .map(|(_, s)| s.as_str())
+        .collect();
+    assert_eq!(reconstructed, plain);
+}
+
+#[test]
+fn classified_writer_emits_at_least_one_semantic_token() {
+    // Sanity check that we're actually classifying — every non-trivial
+    // spec should produce at least one non-Plain token (TagName from
+    // the preamble alone is guaranteed).
+    let ast = parse_to_unit(CANONICAL);
+    let mut capturing = CapturingWriter::default();
+    print_to(&ast, &PrinterConfig::default(), &mut capturing);
+    let has_semantic = capturing
+        .chunks
+        .iter()
+        .any(|(k, _)| !matches!(k, TokenKind::Plain));
+    assert!(has_semantic, "expected at least one non-Plain token");
+    let has_tag = capturing
+        .chunks
+        .iter()
+        .any(|(k, _)| matches!(k, TokenKind::TagName));
+    assert!(has_tag, "expected TagName tokens from preamble");
+}
+
+#[test]
+fn classifies_specific_token_kinds() {
+    // Hand-crafted spec exercising every interesting TokenKind we can
+    // hit from the printer today. The `%if` block lives at the
+    // *top level* (between the preamble and the first `%section`) so
+    // the parser recognises it as a `Conditional` rather than swallowing
+    // it as part of a section body — only then does the printer's
+    // expression path (which emits String/Operator/Number chunks via
+    // `print_expr_ast`) get exercised.
+    let src = "\
+Name:           foo
+Version:        1.0
+
+%if \"x\" == 0
+%define a 1
+%endif
+
+%description
+hi
+
+%post
+echo hi
+";
+    let ast = parse_to_unit(src);
+    let mut w = CapturingWriter::default();
+    print_to(&ast, &PrinterConfig::default(), &mut w);
+    let has = |kind: TokenKind, text: &str| {
+        w.chunks
+            .iter()
+            .any(|(k, s)| *k == kind && s.contains(text))
+    };
+    assert!(has(TokenKind::TagName, "Name"), "expected (TagName, Name) in {:?}", w.chunks);
+    assert!(
+        has(TokenKind::SectionKeyword, "%description"),
+        "expected SectionKeyword for %description in {:?}",
+        w.chunks
+    );
+    assert!(
+        has(TokenKind::SectionKeyword, "%post"),
+        "expected SectionKeyword for %post in {:?}",
+        w.chunks
+    );
+    assert!(
+        has(TokenKind::ConditionalKeyword, "%if"),
+        "expected ConditionalKeyword for %if in {:?}",
+        w.chunks
+    );
+    assert!(
+        has(TokenKind::ConditionalKeyword, "%endif"),
+        "expected ConditionalKeyword for %endif in {:?}",
+        w.chunks
+    );
+    assert!(
+        has(TokenKind::String, "\"x\""),
+        "expected String literal token in {:?}",
+        w.chunks
+    );
+    assert!(
+        has(TokenKind::Operator, "=="),
+        "expected Operator for == in {:?}",
+        w.chunks
+    );
+    assert!(
+        has(TokenKind::Number, "0"),
+        "expected Number for 0 in {:?}",
+        w.chunks
+    );
+    assert!(
+        has(TokenKind::MacroDefKeyword, "%define"),
+        "expected MacroDefKeyword for %define in {:?}",
+        w.chunks
+    );
+}
+
+#[test]
+fn statement_emits_atomic_macro_ref_chunk() {
+    // `%autosetup` (or similar bare macro statement at the top level)
+    // must arrive as a single MacroRef chunk so highlighter consumers
+    // can color the whole invocation uniformly.
+    let src = "%autosetup\n";
+    let ast = parse_to_unit(src);
+    let mut w = CapturingWriter::default();
+    print_to(&ast, &PrinterConfig::default(), &mut w);
+    let atomic = w
+        .chunks
+        .iter()
+        .find(|(k, s)| matches!(k, TokenKind::MacroRef) && s.starts_with("%autosetup"));
+    assert!(
+        atomic.is_some(),
+        "expected one atomic MacroRef chunk starting with %autosetup, got: {:?}",
+        w.chunks
+    );
+}
+
+#[test]
+fn consecutive_sections_separated_by_single_blank_line() {
+    // Regression guard for `Printer::ends_with_blank_line` —
+    // back-to-back sections must not collapse into one line or
+    // gain extra blank lines.
+    let src = "\
+%description
+hi
+
+%prep
+true
+
+%build
+true
+";
+    let ast = parse_to_unit(src);
+    let printed = print(&ast);
+    // Exactly one blank line between consecutive section headers.
+    assert!(
+        printed.contains("hi\n\n%prep"),
+        "missing blank before %prep:\n{printed}"
+    );
+    assert!(
+        printed.contains("true\n\n%build"),
+        "missing blank before %build:\n{printed}"
+    );
+    // No triple-newline runs.
+    assert!(
+        !printed.contains("\n\n\n"),
+        "unexpected triple newline:\n{printed}"
+    );
 }
