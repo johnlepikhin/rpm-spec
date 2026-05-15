@@ -15,6 +15,7 @@
 pub mod changelog;
 pub mod cond;
 pub mod deps;
+pub mod expr;
 pub mod files;
 pub mod input;
 pub mod macros;

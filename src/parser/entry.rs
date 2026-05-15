@@ -282,13 +282,46 @@ fn strip_conditional(
             .into_iter()
             .map(|b| CondBranch {
                 kind: b.kind,
-                expr: b.expr,
+                expr: strip_cond_expr(b.expr),
                 body: b.body.into_iter().map(strip_item).collect(),
                 data: (),
             })
             .collect(),
         otherwise: c.otherwise.map(|v| v.into_iter().map(strip_item).collect()),
         data: (),
+    }
+}
+
+fn strip_cond_expr(e: crate::ast::CondExpr<Span>) -> crate::ast::CondExpr<()> {
+    use crate::ast::CondExpr;
+    match e {
+        CondExpr::Raw(t) => CondExpr::Raw(t),
+        CondExpr::Parsed(ast) => CondExpr::Parsed(Box::new(strip_expr_ast(*ast))),
+        CondExpr::ArchList(items) => CondExpr::ArchList(items),
+    }
+}
+
+fn strip_expr_ast(ast: crate::ast::ExprAst<Span>) -> crate::ast::ExprAst<()> {
+    use crate::ast::ExprAst;
+    match ast {
+        ExprAst::Integer { value, .. } => ExprAst::Integer { value, data: () },
+        ExprAst::String { value, .. } => ExprAst::String { value, data: () },
+        ExprAst::Macro { text, .. } => ExprAst::Macro { text, data: () },
+        ExprAst::Identifier { name, .. } => ExprAst::Identifier { name, data: () },
+        ExprAst::Paren { inner, .. } => ExprAst::Paren {
+            inner: Box::new(strip_expr_ast(*inner)),
+            data: (),
+        },
+        ExprAst::Not { inner, .. } => ExprAst::Not {
+            inner: Box::new(strip_expr_ast(*inner)),
+            data: (),
+        },
+        ExprAst::Binary { kind, lhs, rhs, .. } => ExprAst::Binary {
+            kind,
+            lhs: Box::new(strip_expr_ast(*lhs)),
+            rhs: Box::new(strip_expr_ast(*rhs)),
+            data: (),
+        },
     }
 }
 
@@ -412,7 +445,7 @@ fn strip_files_conditional(
             .into_iter()
             .map(|b| CondBranch {
                 kind: b.kind,
-                expr: b.expr,
+                expr: strip_cond_expr(b.expr),
                 body: b.body.into_iter().map(strip_files_content).collect(),
                 data: (),
             })
@@ -458,7 +491,7 @@ fn strip_preamble_conditional(
             .into_iter()
             .map(|b| CondBranch {
                 kind: b.kind,
-                expr: b.expr,
+                expr: strip_cond_expr(b.expr),
                 body: b.body.into_iter().map(strip_preamble_content).collect(),
                 data: (),
             })

@@ -8,7 +8,7 @@
 
 use nom::{IResult, Parser, bytes::complete::tag, error::ErrorKind, error_position};
 
-use crate::ast::{CondBranch, CondExpr, CondKind, Conditional, Span, Text, TextSegment};
+use crate::ast::{CondBranch, CondExpr, CondKind, Conditional, ExprAst, Span, Text, TextSegment};
 use crate::parse_result::codes;
 
 use super::input::{Input, span_between};
@@ -227,7 +227,7 @@ fn consume_else(input: Input<'_>) -> IResult<Input<'_>, Input<'_>> {
 fn parse_branch_head<'a>(
     input: Input<'a>,
     allow_elif: bool,
-) -> IResult<Input<'a>, (CondKind, CondExpr)> {
+) -> IResult<Input<'a>, (CondKind, CondExpr<Span>)> {
     let (rest, _) = space0(input)?;
     let frag = *rest.fragment();
 
@@ -257,6 +257,26 @@ fn parse_branch_head<'a>(
 
     let (after_kw, _) = nom::Input::take_split(&rest, kw_len);
     let (after_kw, _) = space0(after_kw)?;
+
+    // For plain `%if` / `%elif`, try the structured expression
+    // grammar first. On success — and only when the expression
+    // consumed everything up to the line terminator — emit a
+    // `CondExpr::Parsed` with per-node spans. Anything that fails
+    // the modelled grammar (arithmetic, exotic operators, partial
+    // parses) falls through to the raw-text fallback below so the
+    // file still parses correctly.
+    fn try_structured_expr(input: Input<'_>) -> Option<(Input<'_>, ExprAst<Span>)> {
+        let (after_expr, ast) = super::expr::parse_expression(input).ok()?;
+        let (after_terminator, _) = line_terminator(after_expr).ok()?;
+        Some((after_terminator, ast))
+    }
+
+    if matches!(kind, CondKind::If | CondKind::Elif) {
+        if let Some((after_terminator, ast)) = try_structured_expr(after_kw) {
+            return Ok((after_terminator, (kind, CondExpr::Parsed(Box::new(ast)))));
+        }
+    }
+
     let (after_value, raw) = match logical_line(after_kw) {
         Ok(r) => r,
         Err(_) => (after_kw, String::new()),

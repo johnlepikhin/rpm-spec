@@ -174,6 +174,88 @@ fn macro_definitions_roundtrip() {
 }
 
 #[test]
+fn parsed_expressions_roundtrip() {
+    // Mix of `%if` expressions the AST should recognise structurally
+    // (Integer, comparison, logical AND/OR, parens, string equality,
+    // macro reference). The printer normalises whitespace around
+    // operators — bit-identical roundtrip is not promised — but the
+    // re-parsed AST must compare equal.
+    let src = "\
+%description
+hi
+
+%if 1
+%define a 1
+%endif
+
+%if \"%{?_vendor}\" == \"suse\"
+%define b 1
+%endif
+
+%if !1
+%define c 1
+%endif
+
+%if 0%{?rhel} >= 8 && 0%{?rhel} < 10
+%define d 1
+%endif
+
+%if (1 || 0) && %{?fedora}
+%define e 1
+%endif
+";
+    let ast1 = parse_to_unit(src);
+    let printed = print(&ast1);
+    let ast2 = parse_to_unit(&printed);
+    assert_eq!(ast1, ast2, "printed:\n{printed}");
+}
+
+#[test]
+fn parsed_elif_expression_roundtrips() {
+    // `%elif` must also reach the structured-parse path. A regression
+    // that gates structured parsing on `%if` only would slip past
+    // `parsed_expressions_roundtrip` above.
+    let src = "\
+%description
+hi
+
+%if 0
+%define a 1
+%elif %{?rhel} >= 8
+%define b 1
+%endif
+";
+    let ast1 = parse_to_unit(src);
+    let printed = print(&ast1);
+    let ast2 = parse_to_unit(&printed);
+    assert_eq!(ast1, ast2, "printed:\n{printed}");
+}
+
+#[test]
+fn unmodelled_expr_falls_back_to_raw() {
+    // Arithmetic (`+`) is outside the modelled expression grammar.
+    // The parser must keep the line as `CondExpr::Raw` so the spec
+    // file still round-trips bit-identically.
+    let src = "\
+%description
+hi
+
+%if 1 + 2 == 3
+%define x 1
+%endif
+";
+    let ast1 = parse_to_unit(src);
+    let printed = print(&ast1);
+    // The raw expression must survive round-trip verbatim.
+    assert!(
+        printed.contains("%if 1 + 2 == 3"),
+        "raw expression dropped:\n{printed}"
+    );
+    let ast2 = parse_to_unit(&printed);
+    assert_eq!(ast1, ast2);
+}
+
+#[test]
 fn percent_in_literal_is_double_escaped() {
     // A literal `%` inside a preamble value must survive the round
     // trip — printer emits `%%`, parser decodes back to `%`.

@@ -13,6 +13,7 @@
 
 #![allow(missing_docs)]
 
+use super::expr::ExprAst;
 use super::text::Text;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +33,7 @@ pub struct Conditional<T, Body> {
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct CondBranch<T, Body> {
     pub kind: CondKind,
-    pub expr: CondExpr,
+    pub expr: CondExpr<T>,
     pub body: Vec<Body>,
     pub data: T,
 }
@@ -51,14 +52,28 @@ pub enum CondKind {
     ElifOs,
 }
 
+/// Expression carried by a `%if`/`%elif`/`%ifarch`/`%ifos` branch.
+///
+/// Generic over `T`: parser fills it with [`crate::ast::Span`] for the
+/// span-aware path and `()` otherwise. Only the [`CondExpr::Parsed`]
+/// variant actually carries `T` (on every node of its sub-tree).
+/// `Raw` and `ArchList` keep their content type unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
-pub enum CondExpr {
-    /// `%if EXPR` / `%elif EXPR` — expression in the RPM expression language,
-    /// kept as raw text including any macros. This crate does not parse the
-    /// expression grammar; a future static analyzer may.
+pub enum CondExpr<T = ()> {
+    /// `%if EXPR` / `%elif EXPR` — expression as raw text. Used as a
+    /// fallback when the parser couldn't build a structured
+    /// [`CondExpr::Parsed`] (malformed grammar, arithmetic that the
+    /// AST doesn't model, exotic constructs). Consumers should match
+    /// on [`CondExpr::Parsed`] first and fall back to this variant.
     Raw(Text),
+    /// Parsed expression with per-node user-data (typically [`crate::ast::Span`]
+    /// when produced by the span-aware parser). The parser produces
+    /// this variant when the whole expression fits the modelled
+    /// grammar (see [`crate::ast::expr`]). When it doesn't, the
+    /// parser emits [`CondExpr::Raw`] instead.
+    Parsed(Box<ExprAst<T>>),
     /// `%ifarch x86_64 aarch64` / `%ifarch %{ix86}` —
     /// whitespace-separated arch identifiers, possibly containing macros.
     ArchList(Vec<Text>),

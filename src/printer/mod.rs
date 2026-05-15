@@ -22,6 +22,7 @@
 mod changelog;
 mod cond;
 mod deps;
+mod expr;
 mod files;
 mod macros;
 mod preamble;

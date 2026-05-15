@@ -3,6 +3,7 @@
 use crate::ast::{CondExpr, CondKind, Conditional, Text, TextSegment};
 
 use super::Printer;
+use super::expr::print_expr_ast;
 use super::text::{print_macro_ref, print_text};
 
 /// Render a [`Conditional`] block. `body_printer` is called for every
@@ -43,7 +44,7 @@ pub(crate) fn print_conditional<T, Body, F>(
     p.newline();
 }
 
-fn emit_branch_head(p: &mut Printer<'_>, kw: &str, expr: &CondExpr) {
+fn emit_branch_head<T>(p: &mut Printer<'_>, kw: &str, expr: &CondExpr<T>) {
     p.write_indent();
     p.raw(kw);
     match expr {
@@ -57,6 +58,10 @@ fn emit_branch_head(p: &mut Printer<'_>, kw: &str, expr: &CondExpr) {
                 // to `%%`.
                 print_raw_cond_text(p, t);
             }
+        }
+        CondExpr::Parsed(ast) => {
+            p.raw_char(' ');
+            print_expr_ast(p, ast);
         }
         CondExpr::ArchList(items) => {
             for item in items {

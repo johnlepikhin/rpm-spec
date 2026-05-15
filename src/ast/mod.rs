@@ -23,6 +23,7 @@
 pub mod changelog;
 pub mod cond;
 pub mod deps;
+pub mod expr;
 pub mod files;
 pub mod macros;
 pub mod preamble;
@@ -34,6 +35,7 @@ pub mod text;
 pub use changelog::{ChangelogDate, ChangelogEntry, Month, Weekday};
 pub use cond::{CondBranch, CondExpr, CondKind, Conditional};
 pub use deps::{BoolDep, DepAtom, DepConstraint, DepExpr, EVR, VerOp};
+pub use expr::{BinOp, ExprAst};
 pub use files::{
     AttrField, AttrFields, ConfigFlag, DefattrFields, FileDirective, FileEntry, FilePath,
     FilesContent, VerifyCheck,
