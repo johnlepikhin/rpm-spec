@@ -10,6 +10,7 @@ use super::files::print_files_section;
 use super::preamble::print_preamble_content;
 use super::scriptlet::{print_file_trigger, print_scriptlet, print_trigger};
 use super::text::print_text;
+use super::util::print_subpkg;
 
 pub(crate) fn print_section<T>(p: &mut Printer<'_>, section: &Section<T>) {
     match section {
@@ -136,20 +137,6 @@ fn print_shell_body(p: &mut Printer<'_>, body: &ShellBody) {
         p.write_indent();
         print_text(p, line);
         p.newline();
-    }
-}
-
-fn print_subpkg(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>) {
-    match subpkg {
-        Some(SubpkgRef::Absolute(name)) => {
-            p.raw(" -n ");
-            print_text(p, name);
-        }
-        Some(SubpkgRef::Relative(name)) => {
-            p.raw_char(' ');
-            print_text(p, name);
-        }
-        None => {}
     }
 }
 

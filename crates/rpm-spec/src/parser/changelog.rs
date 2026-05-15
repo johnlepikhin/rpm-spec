@@ -138,8 +138,7 @@ pub fn parse_changelog_entry<'a>(
         advance(after_ws, 1).ok_or_else(|| nom::Err::Error(error_position!(input, ErrorKind::Tag)))?;
     let (after_star_ws, _) = space0(after_star)?;
 
-    let (after_header_line, header_input) = physical_line(after_star_ws)
-        .map_err(|_| nom::Err::Error(error_position!(input, ErrorKind::Tag)))?;
+    let (after_header_line, header_input) = physical_line(after_star_ws)?;
 
     let header_text = header_input.fragment();
     let (date, author, email, version) = parse_header_text(state, header_text)
@@ -153,14 +152,12 @@ pub fn parse_changelog_entry<'a>(
             break;
         }
         // Stop at the next entry header (line starting with `*` after ws).
-        let (after_ws2, _) = space0(cursor)
-            .map_err(|_| nom::Err::Error(error_position!(cursor, ErrorKind::Tag)))?;
+        let (after_ws2, _) = space0(cursor)?;
         if after_ws2.fragment().starts_with('*') {
             break;
         }
         let here = cursor;
-        let (after, line_input) = physical_line(here)
-            .map_err(|_| nom::Err::Error(error_position!(here, ErrorKind::Tag)))?;
+        let (after, line_input) = physical_line(here)?;
         if after.location_offset() == here.location_offset() {
             break;
         }
@@ -200,6 +197,22 @@ fn parse_header_text(
     let month = parse_month(tokens.next()?)?;
     let day: u8 = tokens.next()?.parse().ok()?;
     let year: u16 = tokens.next()?.parse().ok()?;
+
+    if !(1..=31).contains(&day) {
+        state.push_warning_code(
+            codes::W_MALFORMED_CHANGELOG_HEADER,
+            format!("day-of-month `{day}` is out of range 1..=31"),
+            None,
+        );
+    }
+    if !(1970..=2200).contains(&year) {
+        state.push_warning_code(
+            codes::W_MALFORMED_CHANGELOG_HEADER,
+            format!("year `{year}` is implausible (expected 1970..=2200)"),
+            None,
+        );
+    }
+
     let date = ChangelogDate {
         weekday,
         month,

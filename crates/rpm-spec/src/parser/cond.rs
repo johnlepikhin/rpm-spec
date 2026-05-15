@@ -90,7 +90,7 @@ where
                     cursor = after_else;
                     continue;
                 }
-                CondKeyword::Elif(_) => {
+                CondKeyword::Elif => {
                     let (after_head, (new_kind, new_expr)) =
                         parse_branch_head(cursor, /*allow_elif=*/ true)?;
                     if in_else {
@@ -169,8 +169,8 @@ fn peek_cond_keyword(input: Input<'_>) -> Option<CondKeyword> {
     if starts_with_keyword(frag, "%else") {
         return Some(CondKeyword::Else);
     }
-    if let Some(kind) = elif_kind(frag) {
-        return Some(CondKeyword::Elif(kind));
+    if elif_kind(frag).is_some() {
+        return Some(CondKeyword::Elif);
     }
     None
 }
@@ -178,9 +178,10 @@ fn peek_cond_keyword(input: Input<'_>) -> Option<CondKeyword> {
 enum CondKeyword {
     Endif,
     Else,
-    /// The payload is captured by the subsequent `parse_branch_head` call;
-    /// here we only signal that an `%elif*` was seen.
-    Elif(#[allow(dead_code)] CondKind),
+    /// The kind (Elif/ElifArch/ElifOs) is rediscovered by the
+    /// subsequent `parse_branch_head` call; this variant only signals
+    /// that an `%elif*` keyword was seen.
+    Elif,
 }
 
 fn elif_kind(frag: &str) -> Option<CondKind> {

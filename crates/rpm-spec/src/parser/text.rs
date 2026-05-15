@@ -181,11 +181,7 @@ pub fn parse_macro_ref<'a>(
     input: Input<'a>,
 ) -> IResult<Input<'a>, MacroRef> {
     let frag = *input.fragment();
-    let mut chars = frag.char_indices();
-
-    // Consume the leading '%'.
-    let (_, percent) = chars.next().ok_or_else(|| nom_err(input, ErrorKind::Tag))?;
-    if percent != '%' {
+    if !frag.starts_with('%') {
         return Err(nom_err(input, ErrorKind::Tag));
     }
     let after_percent = advance_bytes(input, 1);

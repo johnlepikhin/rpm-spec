@@ -1,8 +1,9 @@
 //! Preamble item rendering.
 
-use crate::ast::{
-    PreambleContent, PreambleItem, Tag, TagQualifier, TagValue, Text, TextSegment,
-};
+use crate::ast::{PreambleContent, PreambleItem, Tag, TagQualifier, TagValue};
+
+#[cfg(test)]
+use crate::ast::Text;
 
 use super::Printer;
 use super::cond::print_conditional;
@@ -148,13 +149,6 @@ fn print_tag_value(p: &mut Printer<'_>, v: &TagValue) {
     }
 }
 
-/// Used by `cond.rs` to detect empty texts; expose internal helper.
-fn _empty_text_check(t: &Text) -> bool {
-    t.segments.iter().all(|s| match s {
-        TextSegment::Literal(l) => l.is_empty(),
-        TextSegment::Macro(_) => false,
-    })
-}
 
 #[cfg(test)]
 mod tests {

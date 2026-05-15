@@ -51,6 +51,10 @@ impl ParserState {
         }
     }
 
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(level = "trace", skip(self), fields(severity = ?diagnostic.severity, code = diagnostic.code.as_deref()))
+    )]
     pub fn push_diagnostic(&self, diagnostic: Diagnostic) {
         self.diagnostics.borrow_mut().push(diagnostic);
     }

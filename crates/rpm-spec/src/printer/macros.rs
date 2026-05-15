@@ -33,33 +33,27 @@ pub(crate) fn print_macro_def<T>(p: &mut Printer<'_>, m: &MacroDef<T>) {
     p.newline();
 }
 
-/// Render a body that may span multiple source lines (`\n` inside
-/// literal segments). Each non-final line gets a trailing ` \`.
+/// Render a macro body that may span several source lines and re-emit
+/// each `\n` boundary as a trailing ` \` continuation.
+///
+/// The body is rendered into a side buffer (with `%%`-escaping) and
+/// then split on `\n`. Caveat: a macro whose own rendering contains a
+/// literal `\n` in one of its arguments will be split across the line
+/// break, which is almost certainly wrong — but our parser never
+/// produces such an AST (a multi-line `%define` body is decomposed
+/// into `Literal` segments at parse time, with macros embedded between
+/// them).
 fn print_body_with_continuations(p: &mut Printer<'_>, body: &Text) {
-    // Convert the body to a sequence of "pieces": each piece is either
-    // a literal chunk (possibly containing `\n`) or an opaque macro
-    // render. We then split on `\n` boundaries that fall inside literal
-    // chunks.
-    //
-    // Macros that contain embedded `\n` in their output are not
-    // line-broken — they are rendered atomically.
-
-    // Strategy: build a complete rendering into a side-buffer, but mark
-    // newline positions. Simpler implementation: render to a temp string
-    // (with %% escaping) and split on `\n`.
-
     let mut buf = String::new();
     {
-        let cfg = p.cfg().clone();
-        let mut tmp = Printer::new(&mut buf, &cfg);
+        let mut tmp = Printer::new(&mut buf, p.cfg());
         print_text(&mut tmp, body);
     }
     let mut lines = buf.split('\n');
     if let Some(first) = lines.next() {
         p.raw(first);
     }
-    let rest: Vec<&str> = lines.collect();
-    for line in rest {
+    for line in lines {
         p.raw(" \\");
         p.newline();
         p.write_indent();

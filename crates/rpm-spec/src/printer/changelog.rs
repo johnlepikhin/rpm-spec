@@ -1,6 +1,6 @@
 //! `%changelog` entry rendering.
 
-use crate::ast::{ChangelogEntry, Month, Section, Span, Weekday};
+use crate::ast::{ChangelogEntry, Month, Weekday};
 
 use super::Printer;
 use super::text::print_text;
@@ -80,11 +80,6 @@ fn month_str(m: Month) -> &'static str {
 pub(crate) fn print_section_changelog<T>(p: &mut Printer<'_>, entries: &[ChangelogEntry<T>]) {
     print_changelog(p, entries);
 }
-
-// Suppress "unused imports" if Section/Span happen to be unreferenced
-// in this small module.
-#[allow(dead_code)]
-fn _suppress_unused(_: Option<&Section<Span>>) {}
 
 #[cfg(test)]
 mod tests {

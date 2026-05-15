@@ -66,12 +66,13 @@ pub fn physical_line<'a>(input: Input<'a>) -> IResult<Input<'a>, Input<'a>> {
 ///
 /// Returns the concatenated content with `\n` separators preserved between
 /// joined lines, and the backslashes stripped. The returned `Input` is the
-/// position of the **first** physical line — useful for span anchoring.
+/// position immediately after the last consumed physical line.
 pub fn logical_line<'a>(input: Input<'a>) -> IResult<Input<'a>, String> {
     let (mut rest, first) = continued_line_segment(input)?;
     let mut joined: String = trim_trailing_backslash(first.fragment()).to_owned();
+    let mut last_had_continuation = ends_with_backslash(first.fragment());
 
-    while ends_with_backslash(first.fragment()) || ends_with_backslash_str(&joined) {
+    while last_had_continuation {
         let (next_rest, next) = match continued_line_segment(rest) {
             Ok(r) => r,
             Err(_) => break,
@@ -79,9 +80,7 @@ pub fn logical_line<'a>(input: Input<'a>) -> IResult<Input<'a>, String> {
         joined.push('\n');
         joined.push_str(trim_trailing_backslash(next.fragment()));
         rest = next_rest;
-        if !ends_with_backslash_str(next.fragment()) {
-            break;
-        }
+        last_had_continuation = ends_with_backslash(next.fragment());
     }
 
     Ok((rest, joined))
@@ -92,10 +91,6 @@ fn continued_line_segment<'a>(input: Input<'a>) -> IResult<Input<'a>, Input<'a>>
 }
 
 fn ends_with_backslash(s: &str) -> bool {
-    ends_with_backslash_str(s)
-}
-
-fn ends_with_backslash_str(s: &str) -> bool {
     // A line ends with a continuation if its last non-CR character is `\`.
     let trimmed = s.trim_end_matches('\r');
     trimmed.ends_with('\\')

@@ -10,33 +10,29 @@ use crate::ast::Span;
 
 /// A fatal parser failure.
 ///
-/// The variants below cover the most common failure classes; the enum is
-/// `#[non_exhaustive]` so downstream code must always include a wildcard
-/// arm.
+/// The current parser entry points (`parse_str`, `parse_str_with_spans`)
+/// never produce a [`ParseError`]: they always return a partial
+/// [`crate::ast::SpecFile`] along with a list of
+/// [`crate::parse_result::Diagnostic`]. This enum is reserved for
+/// future entry points that read from `io::Read` / files, where I/O
+/// failure is a genuinely fatal condition that cannot be modelled as a
+/// diagnostic.
+///
+/// The enum is `#[non_exhaustive]` so adding new variants is non-breaking.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 #[non_exhaustive]
 pub enum ParseError {
-    /// I/O failure while reading source bytes.
+    /// I/O failure while reading source bytes. Reserved for future
+    /// `parse_reader` / `parse_file` entry points.
     #[error("I/O error: {message}")]
     Io { message: String },
-    /// A token was rejected by the lexer / low-level parser.
-    #[error("syntax error at {span:?}: {message}")]
-    Syntax {
-        span:    Option<Span>,
-        message: String,
-    },
-    /// An `%if` / `%ifarch` / `%ifos` opened but never closed.
-    #[error("unterminated conditional block opened at {opened_at:?}")]
-    UnterminatedConditional { opened_at: Option<Span> },
-    /// A section header was malformed (e.g. unknown name, missing argument).
-    #[error("invalid section header at {span:?}: {message}")]
-    InvalidSection {
-        span:    Option<Span>,
-        message: String,
-    },
 }
+
+// Placeholder usage to keep `Span` reachable for future variants.
+#[allow(dead_code)]
+const _: Option<Span> = None;
 
 /// A fatal printer failure.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

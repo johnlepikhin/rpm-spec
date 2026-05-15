@@ -1,13 +1,13 @@
 //! Scriptlet / trigger / file-trigger rendering.
 
 use crate::ast::{
-    FileTrigger, FileTriggerKind, Interpreter, Scriptlet, ScriptletKind, Section, SubpkgRef,
-    Trigger, TriggerKind,
+    FileTrigger, FileTriggerKind, Interpreter, Scriptlet, ScriptletKind, Trigger, TriggerKind,
 };
 
 use super::Printer;
 use super::deps::print_dep_expr;
 use super::text::print_text;
+use super::util::print_subpkg;
 
 pub(crate) fn print_scriptlet<T>(p: &mut Printer<'_>, s: &Scriptlet<T>) {
     p.write_indent();
@@ -72,20 +72,6 @@ pub(crate) fn print_file_trigger<T>(p: &mut Printer<'_>, ft: &FileTrigger<T>) {
     print_shell_body(p, &ft.body);
 }
 
-fn print_subpkg(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>) {
-    match subpkg {
-        Some(SubpkgRef::Absolute(name)) => {
-            p.raw(" -n ");
-            print_text(p, name);
-        }
-        Some(SubpkgRef::Relative(name)) => {
-            p.raw_char(' ');
-            print_text(p, name);
-        }
-        None => {}
-    }
-}
-
 fn print_interp(p: &mut Printer<'_>, interp: Option<&Interpreter>) {
     match interp {
         Some(Interpreter::Lua) => p.raw(" -p <lua>"),
@@ -138,13 +124,10 @@ fn file_trigger_keyword(k: FileTriggerKind) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
-fn _suppress_unused(_: Option<&Section<()>>) {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{DepAtom, DepExpr, ShellBody, Text};
+    use crate::ast::{DepAtom, DepExpr, ShellBody, SubpkgRef, Text};
     use crate::printer::PrinterConfig;
 
     fn render(s: &Scriptlet<()>) -> String {

@@ -85,6 +85,10 @@ pub fn peek_section_header(input: Input<'_>) -> Option<&'static str> {
 /// Stage 2 knows how to handle. Returns `Ok((rest, None))` when the
 /// header is recognized but its body is *not* yet implemented (the
 /// caller should fall back to the deferred-placeholder path).
+#[cfg_attr(
+    feature = "tracing",
+    tracing::instrument(level = "trace", skip(state, input))
+)]
 pub fn parse_section<'a>(
     state: &ParserState,
     input: Input<'a>,

@@ -19,6 +19,7 @@
 //! output is **not** guaranteed to be accepted by `rpmbuild` itself
 //! when `indent > 0`: rpm's own parser rejects indented conditionals.
 
+mod changelog;
 mod cond;
 mod deps;
 mod files;
@@ -27,9 +28,13 @@ mod preamble;
 mod scriptlet;
 mod section;
 mod text;
-mod changelog;
+mod util;
 
 use crate::ast::{Section, SpecFile, SpecItem};
+
+/// Default preamble-value alignment column matching Fedora packaging
+/// style ("Name:           value", value at column 16).
+pub const FEDORA_PREAMBLE_VALUE_COLUMN: usize = 16;
 
 /// Configuration knobs for the pretty-printer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,10 +43,10 @@ pub struct PrinterConfig {
     /// (the default) keeps `%if` keyword flush-left, matching rpm
     /// conventions.
     pub indent: usize,
-    /// Column at which preamble values are aligned. `Some(16)` matches
-    /// Fedora packaging style; if a tag's `Tag(qualifier):` prefix is
-    /// already wider, a single space is used instead. `None` always
-    /// uses a single space.
+    /// Column at which preamble values are aligned. Default
+    /// [`Some(FEDORA_PREAMBLE_VALUE_COLUMN)`]; if a tag's
+    /// `Tag(qualifier):` prefix is already wider, a single space is
+    /// used instead. `None` always uses a single space.
     pub preamble_value_column: Option<usize>,
 }
 
@@ -49,7 +54,7 @@ impl Default for PrinterConfig {
     fn default() -> Self {
         Self {
             indent: 0,
-            preamble_value_column: Some(16),
+            preamble_value_column: Some(FEDORA_PREAMBLE_VALUE_COLUMN),
         }
     }
 }

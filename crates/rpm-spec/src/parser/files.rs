@@ -21,7 +21,7 @@
 //! `%if`/`%endif` blocks inside `%files` are parsed structurally as
 //! [`FilesContent::Conditional`] via the generic [`super::cond::parse_conditional`].
 
-use nom::{IResult, Parser, bytes::complete::tag, error::ErrorKind, error_position};
+use nom::{IResult, error::ErrorKind, error_position};
 
 use crate::ast::{
     AttrField, AttrFields, ConfigFlag, DefattrFields, FileDirective, FileEntry, FilePath,
@@ -370,6 +370,7 @@ fn parse_directive_args<'a>(
 }
 
 fn parse_attr_field(state: &ParserState, raw: &str) -> AttrField {
+    const MAX_FILE_MODE: u32 = 0o7777;
     let trimmed = raw.trim();
     if trimmed == "-" {
         return AttrField::Default;
@@ -378,6 +379,13 @@ fn parse_attr_field(state: &ParserState, raw: &str) -> AttrField {
         && trimmed.chars().all(|c| c.is_ascii_digit())
     {
         if let Ok(n) = u32::from_str_radix(trimmed, 8) {
+            if n > MAX_FILE_MODE {
+                state.push_warning_code(
+                    codes::W_INVALID_NUMBER,
+                    format!("file mode `{trimmed}` exceeds 0o7777"),
+                    None,
+                );
+            }
             return AttrField::Numeric(n);
         }
     }
@@ -544,11 +552,6 @@ fn text_literal(s: &str) -> Text {
     }
 }
 
-// `tag` is imported to avoid `use` warnings in stubs above; not used.
-#[allow(dead_code)]
-fn _unused_tag<'a>(input: Input<'a>) -> IResult<Input<'a>, Input<'a>> {
-    tag("").parse(input)
-}
 
 #[cfg(test)]
 mod tests {

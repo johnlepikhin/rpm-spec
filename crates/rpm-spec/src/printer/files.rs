@@ -2,13 +2,14 @@
 
 use crate::ast::{
     AttrField, AttrFields, ConfigFlag, DefattrFields, FileDirective, FileEntry, FilePath,
-    FilesContent, Section, SubpkgRef, Text, VerifyCheck,
+    FilesContent, SubpkgRef, Text, VerifyCheck,
 };
 
 use super::Printer;
 use super::cond::print_conditional;
 use super::macros::print_comment;
 use super::text::print_text;
+use super::util::print_subpkg;
 
 /// Render a `Section::Files` body. The header itself is emitted by
 /// `section.rs::print_section`.
@@ -173,23 +174,6 @@ fn verify_check_name(c: VerifyCheck) -> &'static str {
 fn print_file_path(p: &mut Printer<'_>, fp: &FilePath) {
     print_text(p, &fp.path);
 }
-
-fn print_subpkg(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>) {
-    match subpkg {
-        Some(SubpkgRef::Absolute(name)) => {
-            p.raw(" -n ");
-            print_text(p, name);
-        }
-        Some(SubpkgRef::Relative(name)) => {
-            p.raw_char(' ');
-            print_text(p, name);
-        }
-        None => {}
-    }
-}
-
-#[allow(dead_code)]
-fn _suppress_unused(_: Option<&Section<()>>) {}
 
 #[cfg(test)]
 mod tests {

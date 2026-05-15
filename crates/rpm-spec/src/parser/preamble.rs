@@ -355,6 +355,10 @@ fn take_balanced_parens<'a>(input: Input<'a>) -> IResult<Input<'a>, String> {
 
 /// Parse one preamble line. Returns multiple [`SpecItem::Preamble`]
 /// entries when the source line packs several deps on the same tag.
+#[cfg_attr(
+    feature = "tracing",
+    tracing::instrument(level = "trace", skip(state, input))
+)]
 pub fn parse_preamble_line<'a>(
     state: &ParserState,
     input: Input<'a>,
@@ -422,20 +426,46 @@ fn build_preamble_items(
                     data: span,
                 })];
             }
-            slices
+            // Build dep expressions first, then assemble items. The
+            // *final* item takes ownership of `tag`/`qualifiers`/`lang`;
+            // preceding items clone. For the common single-dep case
+            // there are zero clones.
+            let deps: Vec<_> = slices
                 .iter()
-                .filter_map(|slice| {
-                    super::deps::parse_dep_expr(state, slice).ok().map(|dep| {
-                        SpecItem::Preamble(PreambleItem {
-                            tag: tag.clone(),
-                            qualifiers: qualifiers.clone(),
-                            lang: lang.clone(),
-                            value: TagValue::Dep(dep),
-                            data: span,
-                        })
-                    })
-                })
-                .collect()
+                .filter_map(|slice| super::deps::parse_dep_expr(state, slice).ok())
+                .collect();
+            if deps.is_empty() {
+                return vec![SpecItem::Preamble(PreambleItem {
+                    tag,
+                    qualifiers,
+                    lang,
+                    value: TagValue::Text(Text::new()),
+                    data: span,
+                })];
+            }
+            let mut items = Vec::with_capacity(deps.len());
+            let mut iter = deps.into_iter().peekable();
+            while let Some(dep) = iter.next() {
+                let is_last = iter.peek().is_none();
+                if is_last {
+                    items.push(SpecItem::Preamble(PreambleItem {
+                        tag,
+                        qualifiers,
+                        lang,
+                        value: TagValue::Dep(dep),
+                        data: span,
+                    }));
+                    break;
+                }
+                items.push(SpecItem::Preamble(PreambleItem {
+                    tag: tag.clone(),
+                    qualifiers: qualifiers.clone(),
+                    lang: lang.clone(),
+                    value: TagValue::Dep(dep),
+                    data: span,
+                }));
+            }
+            items
         }
         TagKind::Bool => {
             let v = match value_trim.to_ascii_lowercase().as_str() {
