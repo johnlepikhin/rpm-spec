@@ -383,6 +383,10 @@ pub fn parse_preamble_line<'a>(
     }
     let (after_colon, _) = nom::Input::take_split(&after_quals, 1);
     let (after_value_ws, _) = space0(after_colon)?;
+    // Absolute source byte where the value text begins, AFTER the
+    // tag prefix and any leading whitespace. Used to give multi-dep
+    // split atoms their own per-atom spans (see `build_preamble_items`).
+    let value_source_start = after_value_ws.location_offset();
 
     let (after_line, value_raw) = match logical_line(after_value_ws) {
         Ok(r) => r,
@@ -401,7 +405,15 @@ pub fn parse_preamble_line<'a>(
         },
     };
 
-    let items = build_preamble_items(state, tag, qualifiers, lang, value_trim, span);
+    let items = build_preamble_items(
+        state,
+        tag,
+        qualifiers,
+        lang,
+        value_trim,
+        value_source_start,
+        span,
+    );
     Ok((after_line, items))
 }
 
@@ -411,6 +423,7 @@ fn build_preamble_items(
     qualifiers: Vec<TagQualifier>,
     lang: Option<String>,
     value_trim: &str,
+    value_source_start: usize,
     span: Span,
 ) -> Vec<SpecItem<Span>> {
     let kind = classify_tag_kind(&tag);
@@ -431,9 +444,56 @@ fn build_preamble_items(
             if deps.is_empty() {
                 return empty_dep_item(tag, qualifiers, lang, span);
             }
+
+            // Per-atom spans for multi-dep splits. The whole-line span
+            // remains the source-of-truth for *single-atom* lines —
+            // autofixers (e.g. `useless-explicit-provides --fix`) rely
+            // on it to locate the entire `Tag: value` line for removal.
+            // Splitting only when there is more than one atom lets
+            // downstream lints (RPM097/098/119 …) compare individual
+            // deps across branches while preserving the autofix
+            // contract for the single-atom case.
+            //
+            // Each `slice` is a sub-slice of `value_trim`, which is
+            // itself a slice of the owned `value_raw` String returned
+            // by `logical_line`. For single-line values (the
+            // overwhelming common case) `value_raw` is a verbatim copy
+            // of source bytes starting at `value_source_start`, so the
+            // offset of a slice within `value_raw` matches its offset
+            // within source. For backslash-continuation-joined values
+            // the buffer is shorter than the matching source range —
+            // the resulting atom spans stay within the parent line
+            // range thanks to the `min(span.end_byte)` clamp below.
+            let value_buf_start = value_trim.as_ptr() as usize;
+            let atom_spans: Vec<Span> = if deps.len() <= 1 {
+                // Single atom: keep the whole-line span. Preserves
+                // autofix behaviour for one-dep `Provides:` /
+                // `Requires:` lines.
+                vec![span; deps.len()]
+            } else {
+                slices
+                    .iter()
+                    .take(deps.len())
+                    .map(|slice| {
+                        let offset_in_buf = (slice.as_ptr() as usize)
+                            .saturating_sub(value_buf_start);
+                        let start = (value_source_start + offset_in_buf).min(span.end_byte);
+                        let end = (start + slice.len()).min(span.end_byte);
+                        Span::new(
+                            start,
+                            end,
+                            span.start_line,
+                            span.start_column,
+                            span.end_line,
+                            span.end_column,
+                        )
+                    })
+                    .collect()
+            };
+
             let mut items = Vec::with_capacity(deps.len());
-            let mut iter = deps.into_iter().peekable();
-            while let Some(dep) = iter.next() {
+            let mut iter = deps.into_iter().zip(atom_spans).peekable();
+            while let Some((dep, atom_span)) = iter.next() {
                 let is_last = iter.peek().is_none();
                 if is_last {
                     items.push(SpecItem::Preamble(PreambleItem {
@@ -441,7 +501,7 @@ fn build_preamble_items(
                         qualifiers,
                         lang,
                         value: TagValue::Dep(dep),
-                        data: span,
+                        data: atom_span,
                     }));
                     break;
                 }
@@ -450,7 +510,7 @@ fn build_preamble_items(
                     qualifiers: qualifiers.clone(),
                     lang: lang.clone(),
                     value: TagValue::Dep(dep),
-                    data: span,
+                    data: atom_span,
                 }));
             }
             items
