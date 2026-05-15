@@ -6,7 +6,36 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
-## Unreleased
+## 0.2.0
+
+### Added
+
+- Structured parser for `%if` / `%elif` expressions (`ast::expr::ExprAst`
+  + `BinOp`). Recognises integer/string/macro/identifier primaries,
+  parenthesised sub-expressions, unary `!`, and binary `||`, `&&`, `==`,
+  `!=`, `<`, `>`, `<=`, `>=` with conventional precedence. Every node
+  carries a span when produced by the span-aware parser.
+- New `CondExpr::Parsed(Box<ExprAst<T>>)` variant — populated when the
+  full expression head fits the modelled grammar. Arithmetic
+  (`+`, `-`, `*`, `/`) and other unmodelled constructs continue to land
+  in `CondExpr::Raw` and round-trip bit-identically.
+- Recursion-depth guard (`MAX_DEPTH = 128`) protects the expression
+  parser from adversarial input like `!!…!!1` or `(((…)))`.
+- Three roundtrip tests (`parsed_expressions_roundtrip`,
+  `parsed_elif_expression_roundtrips`, `unmodelled_expr_falls_back_to_raw`)
+  alongside expanded expression-parser unit coverage.
+
+### Changed
+
+- **BREAKING:** `CondExpr` gained a type parameter (`CondExpr<T = ()>`)
+  so that `Parsed` can carry per-node spans. The default `T = ()` keeps
+  most usages compiling, but downstream code that names the type
+  parameter explicitly, implements traits over the enum, or destructures
+  the previously-monomorphic shape needs to be adjusted.
+- `parser::expr::parse_expression` is `pub(crate)` — the structured
+  parser is reachable only via the conditional path.
+
+## 0.1.0
 
 ### Added
 
