@@ -6,6 +6,20 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
+## 0.3.1
+
+### Fixed
+
+- Multi-dep preamble lines (`BuildRequires: a, b, c`,
+  `Requires: x, y >= 1.0`, and every other dep-bearing tag) now carry a
+  distinct per-atom `Span` on each split `SpecItem::Preamble`. Previously
+  every split item inherited the whole-line span, which broke
+  source-byte slicing in hoist / dedup analyzers. Single-atom lines keep
+  the whole-line span so autofixers can still remove the entire line via
+  `body_span`. Affects: `Requires`, `BuildRequires`, `Provides`,
+  `Conflicts`, `Obsoletes`, `Recommends`, `Suggests`, `Supplements`,
+  `Enhances`, `BuildConflicts`, `OrderWithRequires`.
+
 ## 0.3.0
 
 ### Added
