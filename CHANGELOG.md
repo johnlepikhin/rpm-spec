@@ -6,6 +6,43 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
+## 0.3.0
+
+### Added
+
+- Pretty-printer now emits a category-aware token stream consumable by
+  syntax highlighters, ANSI colorizers, and IDE tooling:
+  - `printer::TokenKind` — `#[non_exhaustive]` enum with 18 variants
+    (preamble tags, section keywords, conditional keywords, macro
+    flavours, `%if` operands/operators, comments, body text, modifier
+    flags). `Plain` is the default for neutral whitespace and
+    punctuation.
+  - `printer::PrintWriter` — single-method trait
+    `emit(&mut self, kind, text)`. Documented as infallible / in-memory
+    only; ANSI-style example included.
+  - `impl PrintWriter for String` — preserves byte-identical output for
+    existing `print` / `print_with` callers.
+  - `printer::print_to(spec, cfg, &mut dyn PrintWriter)` — entry point
+    for category-aware sinks.
+- File directives (`%doc`, `%license`, `%attr`, `%defattr`, `%config`,
+  `%verify`, `%dir`, `%ghost`, `%lang`, `%caps`, `%artifact`,
+  `%missingok`) classified as `MacroRef`; `%files` and scriptlet /
+  trigger / file-trigger keywords as `SectionKeyword`.
+- `text::print_body_literal_escaped` helper centralises the `%` → `%%`
+  body-line escape used by changelog, description, and shell-body
+  rendering.
+- New tests: `classifies_specific_token_kinds`,
+  `statement_emits_atomic_macro_ref_chunk`,
+  `consecutive_sections_separated_by_single_blank_line`, plus
+  `classified_writer_concatenates_to_plain_print` /
+  `classified_writer_emits_at_least_one_semantic_token` round-trip
+  guards.
+
+### Changed
+
+- Crate-level doc (`src/lib.rs`) rewritten — removed pre-alpha / stub
+  language and added a runnable quick-start example.
+
 ## 0.2.0
 
 ### Added
