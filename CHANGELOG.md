@@ -6,6 +6,17 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
+## 0.3.2
+
+### Fixed
+
+- Suppress spurious `W_UNTERMINATED_MACRO` (`rpmspec/W0004`) on real-world
+  spec lines that open a `%{?macro:` body and close it many lines later
+  (e.g. the `%{?ldconfig: %post -n libgcc -p <lua> … }` idiom in
+  `gcc.spec`). The shell-body parser sees only one physical line at a
+  time, so the legitimate cross-line conditional body would otherwise
+  surface as an unterminated-macro warning with a misleading span.
+
 ## 0.3.1
 
 ### Fixed
