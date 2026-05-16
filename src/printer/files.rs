@@ -5,11 +5,11 @@ use crate::ast::{
     FilesContent, SubpkgRef, Text, VerifyCheck,
 };
 
-use super::{Printer, TokenKind};
 use super::cond::print_conditional;
 use super::macros::print_comment;
 use super::text::print_text;
 use super::util::print_subpkg;
+use super::{Printer, TokenKind};
 
 /// Render a `Section::Files` body. The header itself is emitted by
 /// `section.rs::print_section`.

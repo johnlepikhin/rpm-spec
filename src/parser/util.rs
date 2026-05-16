@@ -108,8 +108,11 @@ fn trim_trailing_backslash(s: &str) -> &str {
 /// Consume one blank line (whitespace + line ending or EOF after
 /// whitespace).
 pub fn blank_line<'a>(input: Input<'a>) -> IResult<Input<'a>, Input<'a>> {
-    recognize(pair(space0, alt((value((), line_ending), value((), nom::combinator::eof)))))
-        .parse(input)
+    recognize(pair(
+        space0,
+        alt((value((), line_ending), value((), nom::combinator::eof))),
+    ))
+    .parse(input)
 }
 
 /// Skip any number of blank lines.
@@ -121,8 +124,11 @@ pub fn skip_blank_lines<'a>(input: Input<'a>) -> IResult<Input<'a>, ()> {
 /// Consume `space*` then a newline (or EOF). Used to round off a parsed
 /// directive.
 pub fn line_terminator<'a>(input: Input<'a>) -> IResult<Input<'a>, ()> {
-    let (rest, _) = preceded(space0, alt((value((), line_ending), value((), nom::combinator::eof))))
-        .parse(input)?;
+    let (rest, _) = preceded(
+        space0,
+        alt((value((), line_ending), value((), nom::combinator::eof))),
+    )
+    .parse(input)?;
     Ok((rest, ()))
 }
 

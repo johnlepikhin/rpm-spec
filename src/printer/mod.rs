@@ -205,11 +205,7 @@ pub fn print_with<T>(spec: &SpecFile<T>, cfg: &PrinterConfig) -> String {
 /// print_to(&spec, &PrinterConfig::default(), &mut out);
 /// assert_eq!(out, "");
 /// ```
-pub fn print_to<T>(
-    spec: &SpecFile<T>,
-    cfg: &PrinterConfig,
-    w: &mut dyn PrintWriter,
-) {
+pub fn print_to<T>(spec: &SpecFile<T>, cfg: &PrinterConfig, w: &mut dyn PrintWriter) {
     let mut p = Printer::new(w, cfg);
     print_spec(&mut p, spec);
 }
@@ -267,7 +263,9 @@ impl<'a> Printer<'a> {
         // `new_trailing` is bounded by `text.len()` but we only care up to 2.
         let added = new_trailing.min(BLANK_LINE_NEWLINES as usize) as u8;
         self.trailing_newlines = if new_trailing == text.len() {
-            self.trailing_newlines.saturating_add(added).min(BLANK_LINE_NEWLINES)
+            self.trailing_newlines
+                .saturating_add(added)
+                .min(BLANK_LINE_NEWLINES)
         } else {
             added
         };
@@ -295,8 +293,7 @@ impl<'a> Printer<'a> {
         }
         // Reuse a small stack buffer for the common case; fall back to
         // heap for absurdly large indents.
-        const STACK: &str =
-            "                                                                ";
+        const STACK: &str = "                                                                ";
         if n <= STACK.len() {
             self.raw(&STACK[..n]);
         } else {

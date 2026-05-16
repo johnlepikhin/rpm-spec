@@ -19,16 +19,16 @@ use super::text::Text;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct ChangelogEntry<T = ()> {
-    pub date:    ChangelogDate,
-    pub author:  Text,
+    pub date: ChangelogDate,
+    pub author: Text,
     /// Email captured from `< … >` in the header, if present.
-    pub email:   Option<Text>,
+    pub email: Option<Text>,
     /// Trailing `- 1.2-3` (may contain macros). `None` when absent.
     pub version: Option<Text>,
     /// Body lines (everything between this header and the next).
     /// Leading `-` markers are kept as-is; the parser does not trim them.
-    pub body:    Vec<Text>,
-    pub data:    T,
+    pub body: Vec<Text>,
+    pub data: T,
 }
 
 /// A date as it appears in a `%changelog` header.
@@ -44,9 +44,9 @@ pub struct ChangelogEntry<T = ()> {
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct ChangelogDate {
     pub weekday: Weekday,
-    pub month:   Month,
-    pub day:     u8,
-    pub year:    u16,
+    pub month: Month,
+    pub day: u8,
+    pub year: u16,
 }
 
 /// Three-letter day-of-week tokens as they appear in `%changelog` headers.

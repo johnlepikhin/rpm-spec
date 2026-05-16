@@ -111,7 +111,11 @@ fn install_body_has_macros_and_literal_lines() {
         .iter()
         .find_map(|i| match i {
             SpecItem::Section(s) => match s.as_ref() {
-                Section::BuildScript { kind: BuildScriptKind::Install, body, .. } => Some(body),
+                Section::BuildScript {
+                    kind: BuildScriptKind::Install,
+                    body,
+                    ..
+                } => Some(body),
                 _ => None,
             },
             _ => None,
@@ -137,7 +141,11 @@ fn files_section_directives_parsed() {
         .iter()
         .find_map(|i| match i {
             SpecItem::Section(s) => match s.as_ref() {
-                Section::Files { subpkg: None, content, .. } => Some(content),
+                Section::Files {
+                    subpkg: None,
+                    content,
+                    ..
+                } => Some(content),
                 _ => None,
             },
             _ => None,
@@ -177,7 +185,11 @@ fn config_noreplace_flag() {
         .iter()
         .find_map(|i| match i {
             SpecItem::Section(s) => match s.as_ref() {
-                Section::Files { subpkg: None, content, .. } => Some(content),
+                Section::Files {
+                    subpkg: None,
+                    content,
+                    ..
+                } => Some(content),
                 _ => None,
             },
             _ => None,
@@ -205,11 +217,11 @@ fn libhello_subpackage_with_two_files_sections() {
         .iter()
         .filter_map(|i| match i {
             SpecItem::Section(s) => match s.as_ref() {
-                Section::Files { subpkg: Some(SubpkgRef::Absolute(t)), content, .. }
-                    if t.literal_str() == Some("libhello") =>
-                {
-                    Some(content)
-                }
+                Section::Files {
+                    subpkg: Some(SubpkgRef::Absolute(t)),
+                    content,
+                    ..
+                } if t.literal_str() == Some("libhello") => Some(content),
                 _ => None,
             },
             _ => None,
@@ -255,7 +267,11 @@ fn scriptlets_parsed() {
         .collect();
     assert_eq!(scriptlets.len(), 2);
     // Both are %post.
-    assert!(scriptlets.iter().all(|sc| matches!(sc.kind, ScriptletKind::Post)));
+    assert!(
+        scriptlets
+            .iter()
+            .all(|sc| matches!(sc.kind, ScriptletKind::Post))
+    );
     // One bare, one with subpkg.
     assert!(scriptlets.iter().any(|sc| sc.subpkg.is_none()));
     assert!(scriptlets.iter().any(|sc| matches!(
@@ -331,7 +347,10 @@ fn changelog_one_entry() {
     assert_eq!(e.date.month, Month::May);
     assert_eq!(e.date.weekday, Weekday::Wed);
     assert_eq!(e.author.literal_str(), Some("Maintainer"));
-    assert_eq!(e.email.as_ref().unwrap().literal_str(), Some("m@example.org"));
+    assert_eq!(
+        e.email.as_ref().unwrap().literal_str(),
+        Some("m@example.org")
+    );
     assert_eq!(e.version.as_ref().unwrap().literal_str(), Some("1.0-1"));
 }
 
@@ -375,7 +394,10 @@ fn sourcelist_section_parsed() {
         })
         .expect("%sourcelist");
     assert_eq!(entries.len(), 2);
-    assert_eq!(entries[0].literal_str(), Some("https://example.org/t-1.tar.gz"));
+    assert_eq!(
+        entries[0].literal_str(),
+        Some("https://example.org/t-1.tar.gz")
+    );
 }
 
 const FILES_COND_SPEC: &str = "\

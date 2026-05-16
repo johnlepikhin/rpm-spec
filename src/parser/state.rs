@@ -47,21 +47,21 @@ impl ParserConfig {
 /// ```
 #[derive(Debug, Clone)]
 pub struct ParserState {
-    pub config:      Rc<ParserConfig>,
+    pub config: Rc<ParserConfig>,
     pub diagnostics: Rc<RefCell<Vec<Diagnostic>>>,
 }
 
 impl ParserState {
     pub fn new() -> Self {
         Self {
-            config:      Rc::new(ParserConfig::default()),
+            config: Rc::new(ParserConfig::default()),
             diagnostics: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
     pub fn with_config(config: ParserConfig) -> Self {
         Self {
-            config:      Rc::new(config),
+            config: Rc::new(config),
             diagnostics: Rc::new(RefCell::new(Vec::new())),
         }
     }

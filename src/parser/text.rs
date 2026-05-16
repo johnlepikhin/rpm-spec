@@ -176,15 +176,15 @@ pub fn parse_body_as_text(state: &ParserState, raw: &str) -> Text {
     // truncations like `Provides: %{` still surface their W0004.
     let suppress_unterminated = {
         let t = raw.trim_start();
-        (t.starts_with("%{?") || t.starts_with("%{!?"))
-            && t.contains(':')
-            && !t.contains('}')
+        (t.starts_with("%{?") || t.starts_with("%{!?")) && t.contains(':') && !t.contains('}')
     };
     let before = state.diagnostics.borrow().len();
     let inp = Input::new(raw);
     let result = match parse_text(state, inp, &|_c| false) {
         Ok((_rest, text)) => text,
-        Err(_) => Text { segments: vec![TextSegment::Literal(raw.to_owned())] },
+        Err(_) => Text {
+            segments: vec![TextSegment::Literal(raw.to_owned())],
+        },
     };
     if suppress_unterminated {
         // Two borrow scopes: the drain's `RefMut` must drop before
@@ -227,10 +227,7 @@ fn advance_bytes(input: Input<'_>, n: usize) -> Input<'_> {
 use nom::Input as _;
 
 /// Parse a single [`MacroRef`] starting at the current `%` cursor.
-pub fn parse_macro_ref<'a>(
-    state: &ParserState,
-    input: Input<'a>,
-) -> IResult<Input<'a>, MacroRef> {
+pub fn parse_macro_ref<'a>(state: &ParserState, input: Input<'a>) -> IResult<Input<'a>, MacroRef> {
     let frag = *input.fragment();
     if !frag.starts_with('%') {
         return Err(nom_err(input, ErrorKind::Tag));
@@ -263,17 +260,17 @@ pub fn parse_macro_ref<'a>(
     parse_plain_macro(state, input)
 }
 
-fn parse_plain_macro<'a>(
-    _state: &ParserState,
-    input: Input<'a>,
-) -> IResult<Input<'a>, MacroRef> {
+fn parse_plain_macro<'a>(_state: &ParserState, input: Input<'a>) -> IResult<Input<'a>, MacroRef> {
     // We're positioned at '%' already; skip it.
     let after_percent = advance_bytes(input, 1);
     let frag = *after_percent.fragment();
 
     // Conditional prefix.
     let (conditional, after_prefix) = if frag.starts_with("!?") {
-        (ConditionalMacro::IfNotDefined, advance_bytes(after_percent, 2))
+        (
+            ConditionalMacro::IfNotDefined,
+            advance_bytes(after_percent, 2),
+        )
     } else if frag.starts_with('?') {
         (ConditionalMacro::IfDefined, advance_bytes(after_percent, 1))
     } else {
@@ -290,11 +287,11 @@ fn parse_plain_macro<'a>(
     Ok((
         rest,
         MacroRef {
-            kind:        MacroKind::Plain,
-            name:        name.to_owned(),
-            args:        Vec::new(),
+            kind: MacroKind::Plain,
+            name: name.to_owned(),
+            args: Vec::new(),
             conditional,
-            with_value:  None,
+            with_value: None,
         },
     ))
 }
@@ -361,14 +358,10 @@ fn read_plain_name(s: &str) -> (&str, usize) {
     ("", 0)
 }
 
-fn parse_shell_macro<'a>(
-    state: &ParserState,
-    input: Input<'a>,
-) -> IResult<Input<'a>, MacroRef> {
+fn parse_shell_macro<'a>(state: &ParserState, input: Input<'a>) -> IResult<Input<'a>, MacroRef> {
     // Consume '%('.
     let inside = advance_bytes(input, 2);
-    let (after_inside, body) =
-        parse_text(state, inside, &|c| c == ')')?;
+    let (after_inside, body) = parse_text(state, inside, &|c| c == ')')?;
     let after_inside_frag = *after_inside.fragment();
     if !after_inside_frag.starts_with(')') {
         state.push_warning_code(
@@ -379,11 +372,11 @@ fn parse_shell_macro<'a>(
         return Ok((
             after_inside,
             MacroRef {
-                kind:        MacroKind::Shell,
-                name:        String::new(),
-                args:        vec![body],
+                kind: MacroKind::Shell,
+                name: String::new(),
+                args: vec![body],
                 conditional: ConditionalMacro::None,
-                with_value:  None,
+                with_value: None,
             },
         ));
     }
@@ -391,11 +384,11 @@ fn parse_shell_macro<'a>(
     Ok((
         rest,
         MacroRef {
-            kind:        MacroKind::Shell,
-            name:        String::new(),
-            args:        vec![body],
+            kind: MacroKind::Shell,
+            name: String::new(),
+            args: vec![body],
             conditional: ConditionalMacro::None,
-            with_value:  None,
+            with_value: None,
         },
     ))
 }
@@ -406,8 +399,7 @@ fn parse_bracketed_expr_macro<'a>(
 ) -> IResult<Input<'a>, MacroRef> {
     // Consume '%['.
     let inside = advance_bytes(input, 2);
-    let (after_inside, body) =
-        parse_text(state, inside, &|c| c == ']')?;
+    let (after_inside, body) = parse_text(state, inside, &|c| c == ']')?;
     let after_inside_frag = *after_inside.fragment();
     if !after_inside_frag.starts_with(']') {
         state.push_warning_code(
@@ -418,11 +410,11 @@ fn parse_bracketed_expr_macro<'a>(
         return Ok((
             after_inside,
             MacroRef {
-                kind:        MacroKind::Expr,
-                name:        String::new(),
-                args:        vec![body],
+                kind: MacroKind::Expr,
+                name: String::new(),
+                args: vec![body],
                 conditional: ConditionalMacro::None,
-                with_value:  None,
+                with_value: None,
             },
         ));
     }
@@ -430,19 +422,16 @@ fn parse_bracketed_expr_macro<'a>(
     Ok((
         rest,
         MacroRef {
-            kind:        MacroKind::Expr,
-            name:        String::new(),
-            args:        vec![body],
+            kind: MacroKind::Expr,
+            name: String::new(),
+            args: vec![body],
             conditional: ConditionalMacro::None,
-            with_value:  None,
+            with_value: None,
         },
     ))
 }
 
-fn parse_braced_macro<'a>(
-    state: &ParserState,
-    input: Input<'a>,
-) -> IResult<Input<'a>, MacroRef> {
+fn parse_braced_macro<'a>(state: &ParserState, input: Input<'a>) -> IResult<Input<'a>, MacroRef> {
     // Consume '%{'.
     let mut cursor = advance_bytes(input, 2);
     let frag = *cursor.fragment();
@@ -482,8 +471,7 @@ fn parse_braced_macro<'a>(
         // Two cases: conditional with_value, or builtin body, or
         // builtin-like for unknown keyword.
         let after_colon = advance_bytes(cursor, 1);
-        let (after_body, body) =
-            parse_text(state, after_colon, &|c| c == '}')?;
+        let (after_body, body) = parse_text(state, after_colon, &|c| c == '}')?;
         match conditional {
             ConditionalMacro::None => {
                 // builtin or unknown :body.
@@ -553,7 +541,13 @@ fn parse_braced_macro<'a>(
 
     Ok((
         cursor,
-        MacroRef { kind, name: name.to_owned(), args, conditional, with_value },
+        MacroRef {
+            kind,
+            name: name.to_owned(),
+            args,
+            conditional,
+            with_value,
+        },
     ))
 }
 
@@ -645,7 +639,10 @@ mod tests {
         let m = first_macro(&t);
         assert_eq!(m.name, "with_x");
         assert_eq!(m.conditional, ConditionalMacro::IfNotDefined);
-        assert_eq!(m.with_value.as_ref().unwrap().literal_str(), Some("default"));
+        assert_eq!(
+            m.with_value.as_ref().unwrap().literal_str(),
+            Some("default")
+        );
     }
 
     #[test]

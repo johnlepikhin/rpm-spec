@@ -103,15 +103,15 @@ fn parse_define<'a>(
         after_body,
         SpecItem::MacroDef(MacroDef {
             kind,
-            name:     name.to_owned(),
-            opts:     opts.map(str::to_owned),
+            name: name.to_owned(),
+            opts: opts.map(str::to_owned),
             body,
             // Modifiers (`-e`, `-g`, `<l>`, `<o>`) are stage-2 work.
-            eager:    false,
-            global:   matches!(kind, MacroDefKind::Global),
-            literal:  false,
+            eager: false,
+            global: matches!(kind, MacroDefKind::Global),
+            literal: false,
             one_shot: false,
-            data:     span,
+            data: span,
         }),
     ))
 }
@@ -130,23 +130,20 @@ fn parse_undefine<'a>(
     Ok((
         after_term,
         SpecItem::MacroDef(MacroDef {
-            kind:     MacroDefKind::Undefine,
-            name:     name.to_owned(),
-            opts:     None,
-            body:     Text::new(),
-            eager:    false,
-            global:   false,
-            literal:  false,
+            kind: MacroDefKind::Undefine,
+            name: name.to_owned(),
+            opts: None,
+            body: Text::new(),
+            eager: false,
+            global: false,
+            literal: false,
             one_shot: false,
-            data:     span,
+            data: span,
         }),
     ))
 }
 
-fn parse_bcond<'a>(
-    state: &ParserState,
-    input: Input<'a>,
-) -> IResult<Input<'a>, SpecItem<Span>> {
+fn parse_bcond<'a>(state: &ParserState, input: Input<'a>) -> IResult<Input<'a>, SpecItem<Span>> {
     let start = input;
     let (after_kw, _) = tag("%bcond").parse(input)?;
     let (after_kw, _) = require_space_after_keyword(after_kw)?;
@@ -219,10 +216,7 @@ fn parse_bcond_without<'a>(
     ))
 }
 
-fn parse_include<'a>(
-    state: &ParserState,
-    input: Input<'a>,
-) -> IResult<Input<'a>, SpecItem<Span>> {
+fn parse_include<'a>(state: &ParserState, input: Input<'a>) -> IResult<Input<'a>, SpecItem<Span>> {
     let start = input;
     let (after_kw, _) = tag("%include").parse(input)?;
     let (after_kw, _) = require_space_after_keyword(after_kw)?;
@@ -239,10 +233,7 @@ fn parse_include<'a>(
     ))
 }
 
-fn parse_dnl<'a>(
-    state: &ParserState,
-    input: Input<'a>,
-) -> IResult<Input<'a>, SpecItem<Span>> {
+fn parse_dnl<'a>(state: &ParserState, input: Input<'a>) -> IResult<Input<'a>, SpecItem<Span>> {
     let start = input;
     let (after_kw, _) = tag("%dnl").parse(input)?;
     // `%dnl` swallows the rest of the line; no need for a space.
@@ -257,8 +248,8 @@ fn parse_dnl<'a>(
         after_text,
         SpecItem::Comment(Comment {
             style: CommentStyle::Dnl,
-            text:  body,
-            data:  span,
+            text: body,
+            data: span,
         }),
     ))
 }
@@ -287,8 +278,8 @@ pub fn parse_hash_comment<'a>(
         after_text,
         SpecItem::Comment(Comment {
             style: CommentStyle::Hash,
-            text:  body,
-            data:  span,
+            text: body,
+            data: span,
         }),
     ))
 }
@@ -329,10 +320,16 @@ fn take_macro_name<'a>(input: Input<'a>) -> IResult<Input<'a>, &'a str> {
     let frag = *input.fragment();
     let mut iter = frag.char_indices();
     let Some((_, first)) = iter.next() else {
-        return Err(nom::Err::Error(error_position!(input, ErrorKind::AlphaNumeric)));
+        return Err(nom::Err::Error(error_position!(
+            input,
+            ErrorKind::AlphaNumeric
+        )));
     };
     if !is_macro_name_start(first) {
-        return Err(nom::Err::Error(error_position!(input, ErrorKind::AlphaNumeric)));
+        return Err(nom::Err::Error(error_position!(
+            input,
+            ErrorKind::AlphaNumeric
+        )));
     }
     let mut end = first.len_utf8();
     for (i, c) in iter {
@@ -378,7 +375,9 @@ fn take_optional_opts<'a>(input: Input<'a>) -> (Input<'a>, Option<&'a str>) {
 }
 
 fn strip_leading_space(s: &str) -> &str {
-    s.strip_prefix(' ').or_else(|| s.strip_prefix('\t')).unwrap_or(s)
+    s.strip_prefix(' ')
+        .or_else(|| s.strip_prefix('\t'))
+        .unwrap_or(s)
 }
 
 #[cfg(test)]
@@ -424,7 +423,10 @@ mod tests {
 
     #[test]
     fn define_with_opts() {
-        let (item, _) = run("%define greet(n:) Hello %{-n*}\n", parse_top_macro_statement);
+        let (item, _) = run(
+            "%define greet(n:) Hello %{-n*}\n",
+            parse_top_macro_statement,
+        );
         match item {
             SpecItem::MacroDef(m) => {
                 assert_eq!(m.name, "greet");
@@ -498,7 +500,10 @@ mod tests {
 
     #[test]
     fn include_path() {
-        let (item, _) = run("%include /etc/rpm/macros.fragment\n", parse_top_macro_statement);
+        let (item, _) = run(
+            "%include /etc/rpm/macros.fragment\n",
+            parse_top_macro_statement,
+        );
         match item {
             SpecItem::Include(inc) => {
                 assert_eq!(inc.path.literal_str(), Some("/etc/rpm/macros.fragment"));

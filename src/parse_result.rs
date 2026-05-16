@@ -4,7 +4,7 @@
 
 #![allow(missing_docs)]
 
-use crate::ast::{SpecFile, Span};
+use crate::ast::{Span, SpecFile};
 
 /// Stable diagnostic identifiers issued by the parser.
 ///
@@ -179,7 +179,7 @@ pub mod codes {
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 #[non_exhaustive]
 pub struct ParseResult<T = ()> {
-    pub spec:        SpecFile<T>,
+    pub spec: SpecFile<T>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -188,7 +188,10 @@ impl<T> ParseResult<T> {
     where
         Vec<Diagnostic>: Default,
     {
-        Self { spec, diagnostics: Vec::new() }
+        Self {
+            spec,
+            diagnostics: Vec::new(),
+        }
     }
 
     pub fn with_diagnostics(mut self, diagnostics: Vec<Diagnostic>) -> Self {
@@ -208,11 +211,11 @@ pub struct Diagnostic {
     /// Stable diagnostic identifier intended for suppression and filtering
     /// (e.g. `"rpmspec/E0001"`, `"rpmspec/W042"`). `None` for ad-hoc
     /// diagnostics that have not been categorized yet.
-    pub code:     Option<String>,
-    pub span:     Option<Span>,
-    pub message:  String,
+    pub code: Option<String>,
+    pub span: Option<Span>,
+    pub message: String,
     /// Free-form additional context lines shown alongside the main message.
-    pub notes:    Vec<String>,
+    pub notes: Vec<String>,
 }
 
 impl Diagnostic {

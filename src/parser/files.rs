@@ -256,8 +256,7 @@ fn parse_file_entry<'a>(
             break;
         };
         let after_kw = advance(cursor, dir_kw.len()).expect("matched length");
-        let (after_directive, directive) =
-            parse_directive_args(state, after_kw, dir_kw)?;
+        let (after_directive, directive) = parse_directive_args(state, after_kw, dir_kw)?;
         directives.push(directive);
         let (after_ws2, _) = space0(after_directive)?;
         cursor = after_ws2;
@@ -287,7 +286,11 @@ fn parse_file_entry<'a>(
     let span = span_between(&start, &after_line);
     Ok((
         after_line,
-        FileEntry { directives, path, data: span },
+        FileEntry {
+            directives,
+            path,
+            data: span,
+        },
     ))
 }
 
@@ -297,8 +300,9 @@ fn match_directive_keyword(frag: &str) -> Option<&'static str> {
             // Must be followed by '(' or whitespace/EOL — otherwise it
             // is a longer macro name like `%docdir`.
             match frag.as_bytes().get(kw.len()).copied() {
-                Some(b'(') | Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r')
-                | None => return Some(kw),
+                Some(b'(') | Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') | None => {
+                    return Some(kw);
+                }
                 _ => continue,
             }
         }
@@ -357,11 +361,17 @@ fn parse_directive_args<'a>(
         }
         "%lang" => {
             let (rest, inner) = take_balanced_parens(input)?;
-            Ok((rest, FileDirective::Lang(parse_body_as_text(state, inner.trim()))))
+            Ok((
+                rest,
+                FileDirective::Lang(parse_body_as_text(state, inner.trim())),
+            ))
         }
         "%caps" => {
             let (rest, inner) = take_balanced_parens(input)?;
-            Ok((rest, FileDirective::Caps(parse_body_as_text(state, inner.trim()))))
+            Ok((
+                rest,
+                FileDirective::Caps(parse_body_as_text(state, inner.trim())),
+            ))
         }
         "%artifact" => Ok((input, FileDirective::Artifact)),
         "%missingok" => Ok((input, FileDirective::MissingOk)),
@@ -472,20 +482,23 @@ fn take_balanced_parens<'a>(input: Input<'a>) -> IResult<Input<'a>, String> {
     Ok((rest, inner))
 }
 
-fn parse_paren_list_three<'a>(
-    input: Input<'a>,
-) -> IResult<Input<'a>, [String; 3]> {
+fn parse_paren_list_three<'a>(input: Input<'a>) -> IResult<Input<'a>, [String; 3]> {
     let (rest, inner) = take_balanced_parens(input)?;
     let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
     if parts.len() != 3 {
         return Err(nom::Err::Error(error_position!(input, ErrorKind::Count)));
     }
-    Ok((rest, [parts[0].to_owned(), parts[1].to_owned(), parts[2].to_owned()]))
+    Ok((
+        rest,
+        [
+            parts[0].to_owned(),
+            parts[1].to_owned(),
+            parts[2].to_owned(),
+        ],
+    ))
 }
 
-fn parse_paren_list_three_or_four<'a>(
-    input: Input<'a>,
-) -> IResult<Input<'a>, Vec<String>> {
+fn parse_paren_list_three_or_four<'a>(input: Input<'a>) -> IResult<Input<'a>, Vec<String>> {
     let (rest, inner) = take_balanced_parens(input)?;
     let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
     if parts.len() != 3 && parts.len() != 4 {
@@ -553,7 +566,6 @@ fn text_literal(s: &str) -> Text {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -597,7 +609,10 @@ mod tests {
     fn header_with_subpkg_relative() {
         let s = parse_files("%files devel\n/usr/include/foo.h\n");
         match s {
-            AstSection::Files { subpkg: Some(SubpkgRef::Relative(t)), .. } => {
+            AstSection::Files {
+                subpkg: Some(SubpkgRef::Relative(t)),
+                ..
+            } => {
                 assert_eq!(t.literal_str(), Some("devel"));
             }
             _ => panic!(),
@@ -608,7 +623,10 @@ mod tests {
     fn header_with_subpkg_absolute() {
         let s = parse_files("%files -n libfoo\n/usr/lib/libfoo.so\n");
         match s {
-            AstSection::Files { subpkg: Some(SubpkgRef::Absolute(t)), .. } => {
+            AstSection::Files {
+                subpkg: Some(SubpkgRef::Absolute(t)),
+                ..
+            } => {
                 assert_eq!(t.literal_str(), Some("libfoo"));
             }
             _ => panic!(),

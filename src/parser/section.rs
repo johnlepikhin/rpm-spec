@@ -125,7 +125,9 @@ pub fn parse_section<'a>(
         .map(some),
         "%verify" => parse_verify_section(state, input).map(some),
         "%sepolicy" => parse_sepolicy_section(state, input).map(some),
-        "%sourcelist" => parse_list_section(state, input, "%sourcelist", ListKind::Source).map(some),
+        "%sourcelist" => {
+            parse_list_section(state, input, "%sourcelist", ListKind::Source).map(some)
+        }
         "%patchlist" => parse_list_section(state, input, "%patchlist", ListKind::Patch).map(some),
         "%files" => {
             let (rest, sec) = super::files::parse_files_section(state, input)?;
@@ -136,71 +138,122 @@ pub fn parse_section<'a>(
             Ok((rest, Some(sec)))
         }
         "%pre" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%pre", crate::ast::ScriptletKind::Pre,
+            state,
+            input,
+            "%pre",
+            crate::ast::ScriptletKind::Pre,
         )
         .map(some),
         "%post" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%post", crate::ast::ScriptletKind::Post,
+            state,
+            input,
+            "%post",
+            crate::ast::ScriptletKind::Post,
         )
         .map(some),
         "%preun" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%preun", crate::ast::ScriptletKind::Preun,
+            state,
+            input,
+            "%preun",
+            crate::ast::ScriptletKind::Preun,
         )
         .map(some),
         "%postun" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%postun", crate::ast::ScriptletKind::Postun,
+            state,
+            input,
+            "%postun",
+            crate::ast::ScriptletKind::Postun,
         )
         .map(some),
         "%pretrans" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%pretrans", crate::ast::ScriptletKind::Pretrans,
+            state,
+            input,
+            "%pretrans",
+            crate::ast::ScriptletKind::Pretrans,
         )
         .map(some),
         "%posttrans" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%posttrans", crate::ast::ScriptletKind::Posttrans,
+            state,
+            input,
+            "%posttrans",
+            crate::ast::ScriptletKind::Posttrans,
         )
         .map(some),
         "%preuntrans" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%preuntrans", crate::ast::ScriptletKind::Preuntrans,
+            state,
+            input,
+            "%preuntrans",
+            crate::ast::ScriptletKind::Preuntrans,
         )
         .map(some),
         "%postuntrans" => super::scriptlet::parse_scriptlet_section(
-            state, input, "%postuntrans", crate::ast::ScriptletKind::Postuntrans,
+            state,
+            input,
+            "%postuntrans",
+            crate::ast::ScriptletKind::Postuntrans,
         )
         .map(some),
         "%triggerprein" => super::scriptlet::parse_trigger_section(
-            state, input, "%triggerprein", crate::ast::TriggerKind::Prein,
+            state,
+            input,
+            "%triggerprein",
+            crate::ast::TriggerKind::Prein,
         )
         .map(some),
         "%triggerin" => super::scriptlet::parse_trigger_section(
-            state, input, "%triggerin", crate::ast::TriggerKind::In,
+            state,
+            input,
+            "%triggerin",
+            crate::ast::TriggerKind::In,
         )
         .map(some),
         "%triggerun" => super::scriptlet::parse_trigger_section(
-            state, input, "%triggerun", crate::ast::TriggerKind::Un,
+            state,
+            input,
+            "%triggerun",
+            crate::ast::TriggerKind::Un,
         )
         .map(some),
         "%triggerpostun" => super::scriptlet::parse_trigger_section(
-            state, input, "%triggerpostun", crate::ast::TriggerKind::Postun,
+            state,
+            input,
+            "%triggerpostun",
+            crate::ast::TriggerKind::Postun,
         )
         .map(some),
         "%filetriggerin" => super::scriptlet::parse_file_trigger_section(
-            state, input, "%filetriggerin", crate::ast::FileTriggerKind::In,
+            state,
+            input,
+            "%filetriggerin",
+            crate::ast::FileTriggerKind::In,
         )
         .map(some),
         "%filetriggerun" => super::scriptlet::parse_file_trigger_section(
-            state, input, "%filetriggerun", crate::ast::FileTriggerKind::Un,
+            state,
+            input,
+            "%filetriggerun",
+            crate::ast::FileTriggerKind::Un,
         )
         .map(some),
         "%filetriggerpostun" => super::scriptlet::parse_file_trigger_section(
-            state, input, "%filetriggerpostun", crate::ast::FileTriggerKind::Postun,
+            state,
+            input,
+            "%filetriggerpostun",
+            crate::ast::FileTriggerKind::Postun,
         )
         .map(some),
         "%transfiletriggerin" => super::scriptlet::parse_file_trigger_section(
-            state, input, "%transfiletriggerin", crate::ast::FileTriggerKind::TransIn,
+            state,
+            input,
+            "%transfiletriggerin",
+            crate::ast::FileTriggerKind::TransIn,
         )
         .map(some),
         "%transfiletriggerun" => super::scriptlet::parse_file_trigger_section(
-            state, input, "%transfiletriggerun", crate::ast::FileTriggerKind::TransUn,
+            state,
+            input,
+            "%transfiletriggerun",
+            crate::ast::FileTriggerKind::TransUn,
         )
         .map(some),
         "%transfiletriggerpostun" => super::scriptlet::parse_file_trigger_section(
@@ -383,8 +436,14 @@ fn parse_list_section<'a>(
     Ok((
         cursor,
         match kind {
-            ListKind::Source => Section::SourceList { entries, data: span },
-            ListKind::Patch => Section::PatchList { entries, data: span },
+            ListKind::Source => Section::SourceList {
+                entries,
+                data: span,
+            },
+            ListKind::Patch => Section::PatchList {
+                entries,
+                data: span,
+            },
         },
     ))
 }
@@ -693,7 +752,9 @@ mod tests {
     fn package_with_preamble() {
         let s = parse("%package foo\nSummary: Foo subpkg\nRequires: bar\n");
         match s {
-            Section::Package { name_arg, content, .. } => {
+            Section::Package {
+                name_arg, content, ..
+            } => {
                 match name_arg {
                     PackageName::Relative(t) => assert_eq!(t.literal_str(), Some("foo")),
                     _ => panic!(),
@@ -712,7 +773,9 @@ mod tests {
     fn package_absolute_name() {
         let s = parse("%package -n libfoo\nLicense: MIT\n");
         match s {
-            Section::Package { name_arg, content, .. } => {
+            Section::Package {
+                name_arg, content, ..
+            } => {
                 assert!(matches!(name_arg, PackageName::Absolute(_)));
                 assert_eq!(content.len(), 1);
             }

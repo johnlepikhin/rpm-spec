@@ -16,22 +16,22 @@ use super::text::Text;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct MacroDef<T = ()> {
-    pub kind:     MacroDefKind,
+    pub kind: MacroDefKind,
     /// Verbatim macro name (no leading `%`).
-    pub name:     String,
+    pub name: String,
     /// Raw parametric option string, e.g. `Some("(f:b)")`. Structural parsing
     /// of these is deferred — callers may parse them when needed.
-    pub opts:     Option<String>,
-    pub body:     Text,
+    pub opts: Option<String>,
+    pub body: Text,
     /// `-e` flag — force eager expansion in `%define`.
-    pub eager:    bool,
+    pub eager: bool,
     /// `-g` flag — force global scope.
-    pub global:   bool,
+    pub global: bool,
     /// `<l>` modifier — treat body as a literal (no expansion on definition).
-    pub literal:  bool,
+    pub literal: bool,
     /// `<o>` modifier — one-shot caching (rpm ≥ 4.16).
     pub one_shot: bool,
-    pub data:     T,
+    pub data: T,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,13 +51,13 @@ pub enum MacroDefKind {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct BuildCondition<T = ()> {
-    pub style:   BuildCondStyle,
+    pub style: BuildCondStyle,
     /// Verbatim feature name (without the `bcond_*` prefix).
-    pub name:    String,
+    pub name: String,
     /// Default value expression for `%bcond` (rpm ≥ 4.17.1).
     /// `None` for the legacy `%bcond_with` / `%bcond_without` forms.
     pub default: Option<Text>,
-    pub data:    T,
+    pub data: T,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,8 +94,8 @@ pub struct Comment<T = ()> {
     pub style: CommentStyle,
     /// Body of the comment without the leading `#` / `%dnl` and without the
     /// single optional space that customarily follows them.
-    pub text:  Text,
-    pub data:  T,
+    pub text: Text,
+    pub data: T,
 }
 
 /// How a comment was introduced.

@@ -45,7 +45,11 @@ fn sample_parses_with_expected_shape() {
         .iter()
         .filter(|i| matches!(i, SpecItem::MacroDef(_)))
         .count();
-    assert!(macro_defs >= 2, "expected at least 2 macrodefs, got {:?}", r.spec.items);
+    assert!(
+        macro_defs >= 2,
+        "expected at least 2 macrodefs, got {:?}",
+        r.spec.items
+    );
 
     let bconds = r
         .spec
@@ -84,7 +88,11 @@ fn sample_parses_with_expected_shape() {
         .iter()
         .filter(|d| d.message.contains("not recognized"))
         .count();
-    assert_eq!(unrecognized, 0, "preamble lines should parse cleanly: {:?}", r.diagnostics);
+    assert_eq!(
+        unrecognized, 0,
+        "preamble lines should parse cleanly: {:?}",
+        r.diagnostics
+    );
 }
 
 #[test]
@@ -133,7 +141,11 @@ fn nested_macros_recurse() {
                 .iter()
                 .filter(|s| matches!(s, rpm_spec::ast::TextSegment::Macro(_)))
                 .count();
-            assert!(macros >= 2, "expected nested macros in body, got {:?}", m.body);
+            assert!(
+                macros >= 2,
+                "expected nested macros in body, got {:?}",
+                m.body
+            );
         }
         _ => panic!(),
     }

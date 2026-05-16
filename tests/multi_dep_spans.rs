@@ -72,7 +72,10 @@ fn single_dep_keeps_whole_line_span() {
     let items = dep_items(src);
     assert_eq!(items.len(), 1);
     let (_, sp) = items[0];
-    assert_eq!(sp.start_byte, 0, "single-atom span must start at line start");
+    assert_eq!(
+        sp.start_byte, 0,
+        "single-atom span must start at line start"
+    );
     assert_eq!(
         sp.end_byte,
         src.len(),

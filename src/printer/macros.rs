@@ -158,7 +158,10 @@ mod tests {
             one_shot: false,
             data: (),
         };
-        assert_eq!(render(|p| print_macro_def(p, &m)), "%global greet(n:) Hello\n");
+        assert_eq!(
+            render(|p| print_macro_def(p, &m)),
+            "%global greet(n:) Hello\n"
+        );
     }
 
     #[test]
@@ -204,7 +207,10 @@ mod tests {
             default: Some(Text::from("1")),
             data: (),
         };
-        assert_eq!(render(|p| print_build_condition(p, &b)), "%bcond openssl 1\n");
+        assert_eq!(
+            render(|p| print_build_condition(p, &b)),
+            "%bcond openssl 1\n"
+        );
     }
 
     #[test]
@@ -215,7 +221,10 @@ mod tests {
             default: None,
             data: (),
         };
-        assert_eq!(render(|p| print_build_condition(p, &b)), "%bcond_with ssl\n");
+        assert_eq!(
+            render(|p| print_build_condition(p, &b)),
+            "%bcond_with ssl\n"
+        );
     }
 
     #[test]

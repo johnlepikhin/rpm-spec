@@ -41,7 +41,9 @@ pub struct Text {
 impl Text {
     #[must_use]
     pub const fn new() -> Self {
-        Self { segments: Vec::new() }
+        Self {
+            segments: Vec::new(),
+        }
     }
 
     /// Returns `true` if the text has no segments or all segments are empty
@@ -81,19 +83,25 @@ impl<'a> IntoIterator for &'a Text {
 
 impl From<&str> for Text {
     fn from(s: &str) -> Self {
-        Self { segments: vec![TextSegment::Literal(s.to_owned())] }
+        Self {
+            segments: vec![TextSegment::Literal(s.to_owned())],
+        }
     }
 }
 
 impl From<String> for Text {
     fn from(s: String) -> Self {
-        Self { segments: vec![TextSegment::Literal(s)] }
+        Self {
+            segments: vec![TextSegment::Literal(s)],
+        }
     }
 }
 
 impl From<MacroRef> for Text {
     fn from(m: MacroRef) -> Self {
-        Self { segments: vec![TextSegment::Macro(Box::new(m))] }
+        Self {
+            segments: vec![TextSegment::Macro(Box::new(m))],
+        }
     }
 }
 
@@ -126,18 +134,18 @@ impl TextSegment {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct MacroRef {
-    pub kind:        MacroKind,
+    pub kind: MacroKind,
     /// Verbatim macro name as written, without the leading `%` and without
     /// `?` / `!?` prefixes. For positional and flag references the name
     /// keeps its sigil (`"1"`, `"*"`, `"**"`, `"#"`, `"-f"`, `"-f*"`).
-    pub name:        String,
+    pub name: String,
     /// Arguments passed to a parametric macro (or the raw body for builtins
     /// like `%{shrink:...}`, where there is exactly one element).
-    pub args:        Vec<Text>,
+    pub args: Vec<Text>,
     pub conditional: ConditionalMacro,
     /// `%{?foo:VALUE}` / `%{!?foo:VALUE}` — the body after `:` when
     /// [`MacroRef::conditional`] is not [`ConditionalMacro::None`].
-    pub with_value:  Option<Text>,
+    pub with_value: Option<Text>,
 }
 
 impl MacroRef {
@@ -268,11 +276,11 @@ mod tests {
 
     fn macro_named(name: &str) -> MacroRef {
         MacroRef {
-            kind:        MacroKind::Braced,
-            name:        name.into(),
-            args:        Vec::new(),
+            kind: MacroKind::Braced,
+            name: name.into(),
+            args: Vec::new(),
             conditional: ConditionalMacro::None,
-            with_value:  None,
+            with_value: None,
         }
     }
 

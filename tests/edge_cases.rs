@@ -96,7 +96,9 @@ fn long_input_completes() {
         .spec
         .items
         .iter()
-        .filter(|i| matches!(i, SpecItem::Preamble(p) if matches!(p.tag, rpm_spec::ast::Tag::Requires)))
+        .filter(
+            |i| matches!(i, SpecItem::Preamble(p) if matches!(p.tag, rpm_spec::ast::Tag::Requires)),
+        )
         .count();
     assert_eq!(req_count, 5_000);
     assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
@@ -211,8 +213,5 @@ fn diagnostic_codes_are_populated_on_warnings() {
         .filter_map(|d| d.code.as_deref())
         .collect();
     assert!(!codes.is_empty(), "no codes in {:?}", r.diagnostics);
-    assert!(
-        codes.iter().any(|c| c.starts_with("rpmspec/")),
-        "{codes:?}"
-    );
+    assert!(codes.iter().any(|c| c.starts_with("rpmspec/")), "{codes:?}");
 }

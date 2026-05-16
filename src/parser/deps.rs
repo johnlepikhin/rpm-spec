@@ -54,7 +54,11 @@ fn parse_atom(state: &ParserState, slice: &str) -> Result<DepAtom, ()> {
     };
 
     if name_part.is_empty() {
-        state.push_error_code(codes::E_DEP_ATOM_NO_NAME, "dependency atom has no name", None);
+        state.push_error_code(
+            codes::E_DEP_ATOM_NO_NAME,
+            "dependency atom has no name",
+            None,
+        );
         return Err(());
     }
 
@@ -62,7 +66,11 @@ fn parse_atom(state: &ParserState, slice: &str) -> Result<DepAtom, ()> {
     let name = parse_body_as_text(state, name_str);
     let arch = arch_str.map(|a| parse_body_as_text(state, a));
 
-    Ok(DepAtom { name, arch, constraint })
+    Ok(DepAtom {
+        name,
+        arch,
+        constraint,
+    })
 }
 
 /// Find the first version-comparison operator at paren-depth 0.
@@ -404,7 +412,10 @@ fn parse_if_unless(
         }
         state.push_error_code(
             codes::E_UNEXPECTED_OP_IF_UNLESS,
-            format!("unexpected `{}` in if/unless expression `{inner}`", op_label(*op)),
+            format!(
+                "unexpected `{}` in if/unless expression `{inner}`",
+                op_label(*op)
+            ),
             None,
         );
         return Err(());
@@ -615,7 +626,13 @@ mod tests {
     fn rich_unless_else() {
         let (e, _) = parse("(then unless cond else fallback)");
         match e {
-            DepExpr::Rich(b) => assert!(matches!(*b, BoolDep::Unless { otherwise: Some(_), .. })),
+            DepExpr::Rich(b) => assert!(matches!(
+                *b,
+                BoolDep::Unless {
+                    otherwise: Some(_),
+                    ..
+                }
+            )),
             _ => panic!(),
         }
     }

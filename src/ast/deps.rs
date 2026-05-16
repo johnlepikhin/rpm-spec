@@ -30,10 +30,10 @@ pub enum DepExpr {
 pub struct DepAtom {
     /// Dependency name. Can be a package name, a `name(provider)` virtual,
     /// or an absolute file path. May contain macros.
-    pub name:       Text,
+    pub name: Text,
     /// The optional architecture qualifier in parentheses, e.g.
     /// `name(x86-64)` → `Some(Text::from("x86-64"))`.
-    pub arch:       Option<Text>,
+    pub arch: Option<Text>,
     pub constraint: Option<DepConstraint>,
 }
 
@@ -41,7 +41,7 @@ pub struct DepAtom {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct DepConstraint {
-    pub op:  VerOp,
+    pub op: VerOp,
     pub evr: EVR,
 }
 
@@ -63,7 +63,7 @@ pub enum VerOp {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct EVR {
-    pub epoch:   Option<u32>,
+    pub epoch: Option<u32>,
     pub version: Text,
     pub release: Option<Text>,
 }
@@ -81,19 +81,19 @@ pub enum BoolDep {
     Or(Vec<DepExpr>),
     /// `(then if cond)` or `(then if cond else otherwise)`.
     If {
-        cond:      Box<DepExpr>,
-        then:      Box<DepExpr>,
+        cond: Box<DepExpr>,
+        then: Box<DepExpr>,
         otherwise: Option<Box<DepExpr>>,
     },
     /// `(then unless cond)` or `(then unless cond else otherwise)`.
     Unless {
-        cond:      Box<DepExpr>,
-        then:      Box<DepExpr>,
+        cond: Box<DepExpr>,
+        then: Box<DepExpr>,
         otherwise: Option<Box<DepExpr>>,
     },
     With(Vec<DepExpr>),
     Without {
-        left:  Box<DepExpr>,
+        left: Box<DepExpr>,
         right: Box<DepExpr>,
     },
 }

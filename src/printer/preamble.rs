@@ -170,7 +170,6 @@ fn print_tag_value(p: &mut Printer<'_>, v: &TagValue) {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

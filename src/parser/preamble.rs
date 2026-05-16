@@ -257,7 +257,11 @@ fn parse_quals_or_lang(inner: &str, expect: ParensExpect) -> QualsOrLang {
             // If every comma-separated token maps to a known qualifier
             // keyword, treat the whole as qualifiers. Otherwise lang.
             let parts: Vec<&str> = trimmed.split(',').map(str::trim).collect();
-            if parts.iter().all(|p| try_parse_qualifier_keyword(p).is_some()) && !parts.is_empty() {
+            if parts
+                .iter()
+                .all(|p| try_parse_qualifier_keyword(p).is_some())
+                && !parts.is_empty()
+            {
                 QualsOrLang::Quals(parse_qualifier_list(trimmed))
             } else {
                 QualsOrLang::Lang(trimmed.to_owned())
@@ -379,7 +383,10 @@ pub fn parse_preamble_line<'a>(
     let (after_quals, _) = space0(after_quals)?;
 
     if !after_quals.fragment().starts_with(':') {
-        return Err(nom::Err::Error(error_position!(after_quals, ErrorKind::Tag)));
+        return Err(nom::Err::Error(error_position!(
+            after_quals,
+            ErrorKind::Tag
+        )));
     }
     let (after_colon, _) = nom::Input::take_split(&after_quals, 1);
     let (after_value_ws, _) = space0(after_colon)?;
@@ -475,8 +482,8 @@ fn build_preamble_items(
                     .iter()
                     .take(deps.len())
                     .map(|slice| {
-                        let offset_in_buf = (slice.as_ptr() as usize)
-                            .saturating_sub(value_buf_start);
+                        let offset_in_buf =
+                            (slice.as_ptr() as usize).saturating_sub(value_buf_start);
                         let start = (value_source_start + offset_in_buf).min(span.end_byte);
                         let end = (start + slice.len()).min(span.end_byte);
                         Span::new(
@@ -781,10 +788,7 @@ mod tests {
     fn parse_qualifier_list() {
         let (items, _) = parse_line("Requires(post,postun): /bin/sh\n");
         let p = as_preamble(&items[0]);
-        assert_eq!(
-            p.qualifiers,
-            vec![TagQualifier::Post, TagQualifier::Postun]
-        );
+        assert_eq!(p.qualifiers, vec![TagQualifier::Post, TagQualifier::Postun]);
         match &p.value {
             TagValue::Dep(DepExpr::Atom(a)) => {
                 assert_eq!(a.name.literal_str(), Some("/bin/sh"));
@@ -844,8 +848,7 @@ mod tests {
 
     #[test]
     fn parse_multiline_via_backslash() {
-        let (items, _) =
-            parse_line("Description: long \\\nand longer \\\nand longest\n");
+        let (items, _) = parse_line("Description: long \\\nand longer \\\nand longest\n");
         let p = as_preamble(&items[0]);
         let text = match &p.value {
             TagValue::Text(t) => t,

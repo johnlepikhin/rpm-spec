@@ -348,8 +348,10 @@ mod tests {
     fn mixed_literal_and_macros() {
         let mut t = Text::default();
         t.segments.push(TextSegment::Literal("prefix-".into()));
-        t.segments
-            .push(TextSegment::Macro(Box::new(macro_named("name", MacroKind::Braced))));
+        t.segments.push(TextSegment::Macro(Box::new(macro_named(
+            "name",
+            MacroKind::Braced,
+        ))));
         t.segments.push(TextSegment::Literal("-tail".into()));
         assert_eq!(render(&t), "prefix-%{name}-tail");
     }

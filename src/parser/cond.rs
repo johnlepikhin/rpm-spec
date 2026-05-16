@@ -63,7 +63,11 @@ where
                     let total_span = span_between(&start, &after_endif);
                     return Ok((
                         after_endif,
-                        Conditional { branches, otherwise, data: total_span },
+                        Conditional {
+                            branches,
+                            otherwise,
+                            data: total_span,
+                        },
                     ));
                 }
                 CondKeyword::Else => {
@@ -148,7 +152,11 @@ where
                 }
                 return Ok((
                     cursor,
-                    Conditional { branches, otherwise, data: span },
+                    Conditional {
+                        branches,
+                        otherwise,
+                        data: span,
+                    },
                 ));
             }
         }
@@ -292,12 +300,14 @@ fn parse_branch_head<'a>(
         | CondKind::ElifOs => CondExpr::ArchList(
             raw_trim
                 .split_whitespace()
-                .map(|tok| Text { segments: vec![TextSegment::Literal(tok.to_owned())] })
+                .map(|tok| Text {
+                    segments: vec![TextSegment::Literal(tok.to_owned())],
+                })
                 .collect(),
         ),
-        CondKind::If | CondKind::Elif => {
-            CondExpr::Raw(Text { segments: vec![TextSegment::Literal(raw_trim.to_owned())] })
-        }
+        CondKind::If | CondKind::Elif => CondExpr::Raw(Text {
+            segments: vec![TextSegment::Literal(raw_trim.to_owned())],
+        }),
     };
 
     Ok((after_value, (kind, expr)))
@@ -343,9 +353,7 @@ mod tests {
 
     #[test]
     fn if_with_else() {
-        let c = parse_one(
-            "%if 1\n%define a 1\n%else\n%define b 2\n%endif\n",
-        );
+        let c = parse_one("%if 1\n%define a 1\n%else\n%define b 2\n%endif\n");
         assert_eq!(c.branches.len(), 1);
         assert_eq!(c.branches[0].kind, CondKind::If);
         let else_body = c.otherwise.unwrap();

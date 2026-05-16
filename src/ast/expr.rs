@@ -94,7 +94,7 @@ pub enum ExprAst<T = ()> {
         /// cause the surrounding `CondExpr` to fall back to `Raw`.
         value: i64,
         /// Per-node user-data (typically a span).
-        data:  T,
+        data: T,
     },
     /// Quoted string literal: `"foo"`, `"%{_vendor}"`. The value does
     /// *not* include the surrounding quotes; the printer re-emits ASCII
@@ -106,7 +106,7 @@ pub enum ExprAst<T = ()> {
         /// Verbatim string contents without the surrounding `"`.
         value: String,
         /// Per-node user-data (typically a span).
-        data:  T,
+        data: T,
     },
     /// `%{name}` / `%{?name}` macro reference, stored verbatim
     /// (including the leading `%` and any braces). The text is kept as
@@ -142,14 +142,14 @@ pub enum ExprAst<T = ()> {
         /// The grouped sub-expression.
         inner: Box<ExprAst<T>>,
         /// Per-node user-data (typically a span).
-        data:  T,
+        data: T,
     },
     /// `!expr` — logical NOT.
     Not {
         /// The negated sub-expression.
         inner: Box<ExprAst<T>>,
         /// Per-node user-data (typically a span).
-        data:  T,
+        data: T,
     },
     /// Binary operator application. Operator precedence is encoded in
     /// the tree shape: lower-precedence operators sit higher up.
@@ -157,9 +157,9 @@ pub enum ExprAst<T = ()> {
         /// Operator slot.
         kind: BinOp,
         /// Left-hand operand.
-        lhs:  Box<ExprAst<T>>,
+        lhs: Box<ExprAst<T>>,
         /// Right-hand operand.
-        rhs:  Box<ExprAst<T>>,
+        rhs: Box<ExprAst<T>>,
         /// Per-node user-data (typically a span).
         data: T,
     },

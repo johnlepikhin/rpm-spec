@@ -4,10 +4,10 @@ use crate::ast::{
     FileTrigger, FileTriggerKind, Interpreter, Scriptlet, ScriptletKind, Trigger, TriggerKind,
 };
 
-use super::{Printer, TokenKind};
 use super::deps::print_dep_expr;
 use super::text::print_text;
 use super::util::print_subpkg;
+use super::{Printer, TokenKind};
 
 pub(crate) fn print_scriptlet<T>(p: &mut Printer<'_>, s: &Scriptlet<T>) {
     p.write_indent();

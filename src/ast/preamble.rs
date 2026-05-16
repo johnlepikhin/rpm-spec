@@ -28,15 +28,15 @@ pub enum PreambleContent<T = ()> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct PreambleItem<T = ()> {
-    pub tag:        Tag,
+    pub tag: Tag,
     /// Qualifiers in parentheses after the tag name, e.g.
     /// `Requires(post,postun)` → `vec![Post, Postun]`.
     pub qualifiers: Vec<TagQualifier>,
     /// Language qualifier in parentheses, e.g.
     /// `Summary(ru_RU.UTF-8): …` → `Some("ru_RU.UTF-8")`.
-    pub lang:       Option<String>,
-    pub value:      TagValue,
-    pub data:       T,
+    pub lang: Option<String>,
+    pub value: TagValue,
+    pub data: T,
 }
 
 /// Canonical preamble tag.

@@ -141,7 +141,10 @@ fn parse_unary(input: Input<'_>, depth: u32) -> IResult<Input<'_>, ExprAst<Span>
         let span = span_between(&start, &after_inner);
         return Ok((
             after_inner,
-            ExprAst::Not { inner: Box::new(inner), data: span },
+            ExprAst::Not {
+                inner: Box::new(inner),
+                data: span,
+            },
         ));
     }
     parse_primary(rest, depth)
@@ -165,7 +168,10 @@ fn parse_primary(input: Input<'_>, depth: u32) -> IResult<Input<'_>, ExprAst<Spa
             let span = span_between(&start, &after_close);
             Ok((
                 after_close,
-                ExprAst::Paren { inner: Box::new(inner), data: span },
+                ExprAst::Paren {
+                    inner: Box::new(inner),
+                    data: span,
+                },
             ))
         }
         '"' => parse_string_literal(start, rest),
@@ -180,19 +186,17 @@ fn parse_primary(input: Input<'_>, depth: u32) -> IResult<Input<'_>, ExprAst<Spa
 // Operand parsers
 // =====================================================================
 
-fn parse_integer<'a>(
-    start: Input<'a>,
-    rest: Input<'a>,
-) -> IResult<Input<'a>, ExprAst<Span>> {
+fn parse_integer<'a>(start: Input<'a>, rest: Input<'a>) -> IResult<Input<'a>, ExprAst<Span>> {
     let (after_digits, digits) = digit1(rest)?;
     // i64 overflow falls back to a parse error; the caller (cond.rs)
     // then drops to `CondExpr::Raw`, preserving the source verbatim.
     // TODO(diag): emit W_IF_INT_OVERFLOW for overflow specifically.
     // Distinguishing overflow from malformed digits requires threading
     // `ParserState` through this layer; tracked as a follow-up.
-    let value: i64 = digits.fragment().parse().map_err(|_| {
-        nom::Err::Error(error_position!(rest, ErrorKind::Digit))
-    })?;
+    let value: i64 = digits
+        .fragment()
+        .parse()
+        .map_err(|_| nom::Err::Error(error_position!(rest, ErrorKind::Digit)))?;
     let span = span_between(&start, &after_digits);
     Ok((after_digits, ExprAst::Integer { value, data: span }))
 }
@@ -205,21 +209,20 @@ fn parse_string_literal<'a>(
     // RPM string literals are line-bounded. Reject embedded `\n`/`\r`
     // so a stray unclosed quote can't drag subsequent spec lines into
     // a single literal.
-    let (after_body, body) = nom::bytes::complete::take_while(|c: char| {
-        c != '"' && c != '\n' && c != '\r'
-    })(after_open)?;
+    let (after_body, body) =
+        nom::bytes::complete::take_while(|c: char| c != '"' && c != '\n' && c != '\r')(after_open)?;
     let (after_close, _) = nom_char('"').parse(after_body)?;
     let span = span_between(&start, &after_close);
     Ok((
         after_close,
-        ExprAst::String { value: body.fragment().to_string(), data: span },
+        ExprAst::String {
+            value: body.fragment().to_string(),
+            data: span,
+        },
     ))
 }
 
-fn parse_macro_primary<'a>(
-    start: Input<'a>,
-    rest: Input<'a>,
-) -> IResult<Input<'a>, ExprAst<Span>> {
+fn parse_macro_primary<'a>(start: Input<'a>, rest: Input<'a>) -> IResult<Input<'a>, ExprAst<Span>> {
     // A `%` token in an expression is a macro reference. Forms:
     //   - `%{...}` / `%{?...}`: braced, with brace-depth tracking so
     //     nested `%{?a:%{?b}}` is captured as one extent.
@@ -236,9 +239,8 @@ fn parse_macro_primary<'a>(
     debug_assert!(bytes.first() == Some(&b'%'));
     let body_start = 1usize;
     let end_offset = match bytes.get(body_start) {
-        Some(b'{') => find_brace_close(frag, body_start).ok_or_else(|| {
-            nom::Err::Error(error_position!(rest, ErrorKind::Char))
-        })?,
+        Some(b'{') => find_brace_close(frag, body_start)
+            .ok_or_else(|| nom::Err::Error(error_position!(rest, ErrorKind::Char)))?,
         Some(c) if is_macro_name_start(*c as char) => {
             body_start
                 + frag[body_start..]
@@ -250,7 +252,13 @@ fn parse_macro_primary<'a>(
     let macro_text = frag[..end_offset].to_owned();
     let (after_macro, _) = nom::Input::take_split(&rest, end_offset);
     let span = span_between(&start, &after_macro);
-    Ok((after_macro, ExprAst::Macro { text: macro_text, data: span }))
+    Ok((
+        after_macro,
+        ExprAst::Macro {
+            text: macro_text,
+            data: span,
+        },
+    ))
 }
 
 /// Given `frag` whose byte at `open_pos` is `{`, return the byte
@@ -281,10 +289,7 @@ fn find_brace_close(frag: &str, open_pos: usize) -> Option<usize> {
     None
 }
 
-fn parse_identifier<'a>(
-    start: Input<'a>,
-    rest: Input<'a>,
-) -> IResult<Input<'a>, ExprAst<Span>> {
+fn parse_identifier<'a>(start: Input<'a>, rest: Input<'a>) -> IResult<Input<'a>, ExprAst<Span>> {
     let (after_id, ident) = recognize(pair(
         satisfy(is_macro_name_start),
         take_while1(is_macro_name_char),
@@ -297,7 +302,10 @@ fn parse_identifier<'a>(
     let span = span_between(&start, &after_id);
     Ok((
         after_id,
-        ExprAst::Identifier { name: ident.fragment().to_string(), data: span },
+        ExprAst::Identifier {
+            name: ident.fragment().to_string(),
+            data: span,
+        },
     ))
 }
 
@@ -310,11 +318,15 @@ fn parse_identifier<'a>(
 /// consume leading whitespace.
 fn try_op<'a>(input: Input<'a>, op: &'static str) -> Option<Input<'a>> {
     let frag = *input.fragment();
-    frag.starts_with(op).then(|| nom::Input::take_split(&input, op.len()).0)
+    frag.starts_with(op)
+        .then(|| nom::Input::take_split(&input, op.len()).0)
 }
 
 /// Bump the recursion depth and bail out if it exceeds [`MAX_DEPTH`].
-fn enter_depth(input: Input<'_>, depth: u32) -> Result<u32, nom::Err<nom::error::Error<Input<'_>>>> {
+fn enter_depth(
+    input: Input<'_>,
+    depth: u32,
+) -> Result<u32, nom::Err<nom::error::Error<Input<'_>>>> {
     if depth >= MAX_DEPTH {
         return Err(nom::Err::Error(error_position!(input, ErrorKind::TooLarge)));
     }
@@ -346,7 +358,10 @@ mod tests {
     fn logical_and() {
         let ast = parse_full("1 && 0").unwrap();
         match ast {
-            ExprAst::Binary { kind: BinOp::LogAnd, .. } => {}
+            ExprAst::Binary {
+                kind: BinOp::LogAnd,
+                ..
+            } => {}
             other => panic!("expected LogAnd, got {other:?}"),
         }
     }
@@ -356,9 +371,20 @@ mod tests {
         // `1 || 0 && 1` should parse as `1 || (0 && 1)`.
         let ast = parse_full("1 || 0 && 1").unwrap();
         match ast {
-            ExprAst::Binary { kind: BinOp::LogOr, lhs, rhs, .. } => {
+            ExprAst::Binary {
+                kind: BinOp::LogOr,
+                lhs,
+                rhs,
+                ..
+            } => {
                 assert!(matches!(*lhs, ExprAst::Integer { value: 1, .. }));
-                assert!(matches!(*rhs, ExprAst::Binary { kind: BinOp::LogAnd, .. }));
+                assert!(matches!(
+                    *rhs,
+                    ExprAst::Binary {
+                        kind: BinOp::LogAnd,
+                        ..
+                    }
+                ));
             }
             other => panic!("expected LogOr at root, got {other:?}"),
         }
@@ -368,7 +394,12 @@ mod tests {
     fn string_equality() {
         let ast = parse_full("\"foo\" == \"bar\"").unwrap();
         match ast {
-            ExprAst::Binary { kind: BinOp::Eq, lhs, rhs, .. } => {
+            ExprAst::Binary {
+                kind: BinOp::Eq,
+                lhs,
+                rhs,
+                ..
+            } => {
                 assert!(matches!(*lhs, ExprAst::String { ref value, .. } if value == "foo"));
                 assert!(matches!(*rhs, ExprAst::String { ref value, .. } if value == "bar"));
             }
@@ -382,7 +413,10 @@ mod tests {
         let ast = parse_full("0 >= 8 && 0 < 10").unwrap();
         assert!(matches!(
             ast,
-            ExprAst::Binary { kind: BinOp::LogAnd, .. }
+            ExprAst::Binary {
+                kind: BinOp::LogAnd,
+                ..
+            }
         ));
     }
 
@@ -414,7 +448,10 @@ mod tests {
         let ast = parse_full("%{?rhel} >= 8").unwrap();
         assert!(matches!(
             ast,
-            ExprAst::Binary { kind: BinOp::Ge, .. }
+            ExprAst::Binary {
+                kind: BinOp::Ge,
+                ..
+            }
         ));
     }
 
@@ -452,7 +489,10 @@ mod tests {
         let ast = parse_full("1 != 0").unwrap();
         assert!(matches!(
             ast,
-            ExprAst::Binary { kind: BinOp::Ne, .. }
+            ExprAst::Binary {
+                kind: BinOp::Ne,
+                ..
+            }
         ));
     }
 
@@ -460,11 +500,17 @@ mod tests {
     fn le_and_ge_operators() {
         assert!(matches!(
             parse_full("1 <= 2"),
-            Some(ExprAst::Binary { kind: BinOp::Le, .. })
+            Some(ExprAst::Binary {
+                kind: BinOp::Le,
+                ..
+            })
         ));
         assert!(matches!(
             parse_full("3 >= 2"),
-            Some(ExprAst::Binary { kind: BinOp::Ge, .. })
+            Some(ExprAst::Binary {
+                kind: BinOp::Ge,
+                ..
+            })
         ));
     }
 
@@ -473,8 +519,18 @@ mod tests {
         // `1 || 0 || 1` => `(1 || 0) || 1`
         let ast = parse_full("1 || 0 || 1").unwrap();
         match ast {
-            ExprAst::Binary { kind: BinOp::LogOr, lhs, .. } => {
-                assert!(matches!(*lhs, ExprAst::Binary { kind: BinOp::LogOr, .. }));
+            ExprAst::Binary {
+                kind: BinOp::LogOr,
+                lhs,
+                ..
+            } => {
+                assert!(matches!(
+                    *lhs,
+                    ExprAst::Binary {
+                        kind: BinOp::LogOr,
+                        ..
+                    }
+                ));
             }
             other => panic!("got {other:?}"),
         }
@@ -486,9 +542,26 @@ mod tests {
         //  → ((1<2) && (3==4)) || (5!=6)
         let ast = parse_full("1 < 2 && 3 == 4 || 5 != 6").unwrap();
         match ast {
-            ExprAst::Binary { kind: BinOp::LogOr, lhs, rhs, .. } => {
-                assert!(matches!(*lhs, ExprAst::Binary { kind: BinOp::LogAnd, .. }));
-                assert!(matches!(*rhs, ExprAst::Binary { kind: BinOp::Ne, .. }));
+            ExprAst::Binary {
+                kind: BinOp::LogOr,
+                lhs,
+                rhs,
+                ..
+            } => {
+                assert!(matches!(
+                    *lhs,
+                    ExprAst::Binary {
+                        kind: BinOp::LogAnd,
+                        ..
+                    }
+                ));
+                assert!(matches!(
+                    *rhs,
+                    ExprAst::Binary {
+                        kind: BinOp::Ne,
+                        ..
+                    }
+                ));
             }
             other => panic!("got {other:?}"),
         }
@@ -507,7 +580,10 @@ mod tests {
     fn deeply_nested_parens() {
         let ast = parse_full("((((1))))").unwrap();
         // Should peel to Integer(1).
-        assert!(matches!(ast.peel_parens(), ExprAst::Integer { value: 1, .. }));
+        assert!(matches!(
+            ast.peel_parens(),
+            ExprAst::Integer { value: 1, .. }
+        ));
     }
 
     #[test]

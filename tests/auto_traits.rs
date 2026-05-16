@@ -2,7 +2,7 @@
 //! body of every test is `()` — the assertions are encoded in the
 //! generic bounds and resolve at type-check time.
 
-use rpm_spec::ast::{SpecFile, Span};
+use rpm_spec::ast::{Span, SpecFile};
 use rpm_spec::error::{ParseError, PrintError};
 use rpm_spec::parse_result::{Diagnostic, ParseResult, Severity};
 

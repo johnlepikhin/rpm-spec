@@ -19,7 +19,10 @@ use super::util::{blank_line, line_terminator, physical_line, space0, strip_bom}
 pub fn parse_str(input: &str) -> ParseResult<()> {
     let with_spans = parse_str_with_spans(input);
     let stripped = strip_spans(with_spans.spec);
-    ParseResult { spec: stripped, diagnostics: with_spans.diagnostics }
+    ParseResult {
+        spec: stripped,
+        diagnostics: with_spans.diagnostics,
+    }
 }
 
 /// Parse a spec string and attach byte/line/column spans to every node.
@@ -90,15 +93,13 @@ pub fn parse_str_with_spans(input: &str) -> ParseResult<Span> {
                 let (after_section, _) = swallow_section_body(cursor);
                 state.push_warning_code(
                     codes::W_DEFERRED_SECTION,
-                    format!(
-                        "section `{name}` parsing is not yet implemented; body skipped"
-                    ),
+                    format!("section `{name}` parsing is not yet implemented; body skipped"),
                     Some(header_span),
                 );
                 items.push(SpecItem::Comment(Comment {
                     style: CommentStyle::Dnl,
-                    text:  Text::from(format!("[deferred] {name}")),
-                    data:  span_between(&cursor, &after_section),
+                    text: Text::from(format!("[deferred] {name}")),
+                    data: span_between(&cursor, &after_section),
                 }));
                 cursor = after_section;
                 continue;
@@ -145,7 +146,10 @@ pub fn parse_str_with_spans(input: &str) -> ParseResult<Span> {
     }
 
     let total_span = span_between(&total_start, &cursor);
-    let spec = SpecFile { items, data: total_span };
+    let spec = SpecFile {
+        items,
+        data: total_span,
+    };
     let diagnostics = state.into_diagnostics();
     ParseResult { spec, diagnostics }
 }
@@ -237,9 +241,11 @@ fn strip_item(item: SpecItem<Span>) -> SpecItem<()> {
         SpecItem::Include(IncludeDirective { path, .. }) => {
             SpecItem::Include(IncludeDirective { path, data: () })
         }
-        SpecItem::Comment(Comment { style, text, .. }) => {
-            SpecItem::Comment(Comment { style, text, data: () })
-        }
+        SpecItem::Comment(Comment { style, text, .. }) => SpecItem::Comment(Comment {
+            style,
+            text,
+            data: (),
+        }),
         SpecItem::MacroDef(MacroDef {
             kind,
             name,
@@ -261,13 +267,31 @@ fn strip_item(item: SpecItem<Span>) -> SpecItem<()> {
             one_shot,
             data: (),
         }),
-        SpecItem::BuildCondition(BuildCondition { style, name, default, .. }) => {
-            SpecItem::BuildCondition(BuildCondition { style, name, default, data: () })
-        }
+        SpecItem::BuildCondition(BuildCondition {
+            style,
+            name,
+            default,
+            ..
+        }) => SpecItem::BuildCondition(BuildCondition {
+            style,
+            name,
+            default,
+            data: (),
+        }),
         SpecItem::Conditional(c) => SpecItem::Conditional(strip_conditional(c)),
-        SpecItem::Preamble(PreambleItem { tag, qualifiers, lang, value, .. }) => {
-            SpecItem::Preamble(PreambleItem { tag, qualifiers, lang, value, data: () })
-        }
+        SpecItem::Preamble(PreambleItem {
+            tag,
+            qualifiers,
+            lang,
+            value,
+            ..
+        }) => SpecItem::Preamble(PreambleItem {
+            tag,
+            qualifiers,
+            lang,
+            value,
+            data: (),
+        }),
         SpecItem::Section(s) => SpecItem::Section(Box::new(strip_section(*s))),
     }
 }
@@ -326,22 +350,31 @@ fn strip_expr_ast(ast: crate::ast::ExprAst<Span>) -> crate::ast::ExprAst<()> {
 }
 
 fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
-    use crate::ast::{
-        ChangelogEntry, FileTrigger, Scriptlet, Section, Trigger,
-    };
+    use crate::ast::{ChangelogEntry, FileTrigger, Scriptlet, Section, Trigger};
     match s {
-        Section::Description { subpkg, body, .. } => {
-            Section::Description { subpkg, body, data: () }
-        }
-        Section::Package { name_arg, content, .. } => Section::Package {
+        Section::Description { subpkg, body, .. } => Section::Description {
+            subpkg,
+            body,
+            data: (),
+        },
+        Section::Package {
+            name_arg, content, ..
+        } => Section::Package {
             name_arg,
             content: content.into_iter().map(strip_preamble_content).collect(),
             data: (),
         },
-        Section::BuildScript { kind, body, .. } => {
-            Section::BuildScript { kind, body, data: () }
-        }
-        Section::Files { subpkg, file_lists, content, .. } => Section::Files {
+        Section::BuildScript { kind, body, .. } => Section::BuildScript {
+            kind,
+            body,
+            data: (),
+        },
+        Section::Files {
+            subpkg,
+            file_lists,
+            content,
+            ..
+        } => Section::Files {
             subpkg,
             file_lists,
             content: content.into_iter().map(strip_files_content).collect(),
@@ -398,7 +431,11 @@ fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
             body,
             data: (),
         }),
-        Section::Verify { subpkg, body, .. } => Section::Verify { subpkg, body, data: () },
+        Section::Verify { subpkg, body, .. } => Section::Verify {
+            subpkg,
+            body,
+            data: (),
+        },
         Section::Changelog { entries, .. } => Section::Changelog {
             entries: entries
                 .into_iter()
@@ -415,22 +452,30 @@ fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
         },
         Section::SourceList { entries, .. } => Section::SourceList { entries, data: () },
         Section::PatchList { entries, .. } => Section::PatchList { entries, data: () },
-        Section::Sepolicy { subpkg, body, .. } => Section::Sepolicy { subpkg, body, data: () },
+        Section::Sepolicy { subpkg, body, .. } => Section::Sepolicy {
+            subpkg,
+            body,
+            data: (),
+        },
     }
 }
 
-fn strip_files_content(
-    fc: crate::ast::FilesContent<Span>,
-) -> crate::ast::FilesContent<()> {
+fn strip_files_content(fc: crate::ast::FilesContent<Span>) -> crate::ast::FilesContent<()> {
     use crate::ast::{Comment, FileEntry, FilesContent};
     match fc {
         FilesContent::Blank => FilesContent::Blank,
-        FilesContent::Comment(Comment { style, text, .. }) => {
-            FilesContent::Comment(Comment { style, text, data: () })
-        }
-        FilesContent::Entry(FileEntry { directives, path, .. }) => {
-            FilesContent::Entry(FileEntry { directives, path, data: () })
-        }
+        FilesContent::Comment(Comment { style, text, .. }) => FilesContent::Comment(Comment {
+            style,
+            text,
+            data: (),
+        }),
+        FilesContent::Entry(FileEntry {
+            directives, path, ..
+        }) => FilesContent::Entry(FileEntry {
+            directives,
+            path,
+            data: (),
+        }),
         FilesContent::Conditional(c) => FilesContent::Conditional(strip_files_conditional(c)),
     }
 }
@@ -464,17 +509,25 @@ fn strip_preamble_content(
     match pc {
         PreambleContent::Blank => PreambleContent::Blank,
         PreambleContent::Comment(Comment { style, text, .. }) => {
-            PreambleContent::Comment(Comment { style, text, data: () })
-        }
-        PreambleContent::Item(PreambleItem { tag, qualifiers, lang, value, .. }) => {
-            PreambleContent::Item(PreambleItem {
-                tag,
-                qualifiers,
-                lang,
-                value,
+            PreambleContent::Comment(Comment {
+                style,
+                text,
                 data: (),
             })
         }
+        PreambleContent::Item(PreambleItem {
+            tag,
+            qualifiers,
+            lang,
+            value,
+            ..
+        }) => PreambleContent::Item(PreambleItem {
+            tag,
+            qualifiers,
+            lang,
+            value,
+            data: (),
+        }),
         PreambleContent::Conditional(c) => {
             PreambleContent::Conditional(strip_preamble_conditional(c))
         }
@@ -554,10 +607,7 @@ mod tests {
                 _ => "other",
             })
             .collect();
-        assert_eq!(
-            kinds,
-            ["comment", "macrodef", "macrodef", "bcond", "bcond"]
-        );
+        assert_eq!(kinds, ["comment", "macrodef", "macrodef", "bcond", "bcond"]);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
     }
 
@@ -667,7 +717,9 @@ Greets the world.\n\
             .spec
             .items
             .iter()
-            .filter(|i| matches!(i, SpecItem::Section(s) if matches!(**s, Section::Description{..})))
+            .filter(
+                |i| matches!(i, SpecItem::Section(s) if matches!(**s, Section::Description{..})),
+            )
             .count();
         assert_eq!(descriptions, 1);
         // After Stage 3 no sections are deferred anymore.
@@ -694,6 +746,10 @@ Greets the world.\n\
                 _ => None,
             })
             .collect();
-        assert!(names.iter().any(|(t, v)| matches!(t, Tag::Name) && v.as_deref() == Some("hello")));
+        assert!(
+            names
+                .iter()
+                .any(|(t, v)| matches!(t, Tag::Name) && v.as_deref() == Some("hello"))
+        );
     }
 }

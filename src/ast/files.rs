@@ -24,8 +24,8 @@ pub enum FilesContent<T = ()> {
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct FileEntry<T = ()> {
     pub directives: Vec<FileDirective>,
-    pub path:       Option<FilePath>,
-    pub data:       T,
+    pub path: Option<FilePath>,
+    pub data: T,
 }
 
 /// One `%files` directive.
@@ -54,7 +54,10 @@ pub enum FileDirective {
     /// `%ghost path` — own the path but do not package it.
     Ghost,
     /// `%verify([not] checks…) path`.
-    Verify { negate: bool, checks: Vec<VerifyCheck> },
+    Verify {
+        negate: bool,
+        checks: Vec<VerifyCheck>,
+    },
     /// `%lang(ru) path` — locale-specific files.
     Lang(Text),
     /// `%caps(cap_…=ep) path` — Linux capabilities.
@@ -71,7 +74,7 @@ pub enum FileDirective {
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct DefattrFields {
     pub fmode: AttrField,
-    pub user:  AttrField,
+    pub user: AttrField,
     pub group: AttrField,
     pub dmode: Option<AttrField>,
 }
@@ -81,8 +84,8 @@ pub struct DefattrFields {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct AttrFields {
-    pub mode:  AttrField,
-    pub user:  AttrField,
+    pub mode: AttrField,
+    pub user: AttrField,
     pub group: AttrField,
 }
 

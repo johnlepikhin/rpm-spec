@@ -16,18 +16,18 @@ pub const DEFAULT_FILE_TRIGGER_PRIORITY: u32 = 100_000;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Scriptlet<T = ()> {
-    pub kind:          ScriptletKind,
-    pub subpkg:        Option<SubpkgRef>,
+    pub kind: ScriptletKind,
+    pub subpkg: Option<SubpkgRef>,
     /// `-p` — interpreter selection.
-    pub interp:        Option<Interpreter>,
+    pub interp: Option<Interpreter>,
     /// `-e` — expand macros in the body before execution.
     pub expand_macros: bool,
     /// `-q` — quiet mode.
-    pub quiet:         bool,
+    pub quiet: bool,
     /// `-f FILE` — body read from `FILE` instead of inline.
-    pub from_file:     Option<Text>,
-    pub body:          ShellBody,
-    pub data:          T,
+    pub from_file: Option<Text>,
+    pub body: ShellBody,
+    pub data: T,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,13 +61,13 @@ pub enum Interpreter {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Trigger<T = ()> {
-    pub kind:       TriggerKind,
-    pub subpkg:     Option<SubpkgRef>,
-    pub interp:     Option<Interpreter>,
+    pub kind: TriggerKind,
+    pub subpkg: Option<SubpkgRef>,
+    pub interp: Option<Interpreter>,
     /// Conditions written after `--` and separated by commas.
     pub conditions: Vec<DepExpr>,
-    pub body:       ShellBody,
-    pub data:       T,
+    pub body: ShellBody,
+    pub data: T,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,16 +85,16 @@ pub enum TriggerKind {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct FileTrigger<T = ()> {
-    pub kind:     FileTriggerKind,
-    pub subpkg:   Option<SubpkgRef>,
-    pub interp:   Option<Interpreter>,
+    pub kind: FileTriggerKind,
+    pub subpkg: Option<SubpkgRef>,
+    pub interp: Option<Interpreter>,
     /// `-P NN` — priority. When `None`, RPM defaults to
     /// [`DEFAULT_FILE_TRIGGER_PRIORITY`]; higher values run earlier.
     pub priority: Option<u32>,
     /// Path prefixes written after `--`.
     pub prefixes: Vec<Text>,
-    pub body:     ShellBody,
-    pub data:     T,
+    pub body: ShellBody,
+    pub data: T,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

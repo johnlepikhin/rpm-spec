@@ -37,15 +37,15 @@ use super::util::{line_terminator, space0};
 
 #[derive(Debug, Default)]
 struct HeaderOpts {
-    subpkg:        Option<SubpkgRef>,
-    interp:        Option<Interpreter>,
+    subpkg: Option<SubpkgRef>,
+    interp: Option<Interpreter>,
     expand_macros: bool,
-    quiet:         bool,
-    from_file:     Option<Text>,
-    priority:      Option<u32>,
+    quiet: bool,
+    from_file: Option<Text>,
+    priority: Option<u32>,
     /// Raw conditions/prefixes following `--`. Caller decodes them into
     /// either dep conditions (triggers) or prefix paths (file-triggers).
-    after_dashes:  Option<String>,
+    after_dashes: Option<String>,
 }
 
 /// Parse a scriptlet section header and shell body into
@@ -434,7 +434,11 @@ fn first_word(s: &str) -> &str {
 mod tests {
     use super::*;
 
-    fn run_scriptlet(src: &str, keyword: &str, kind: ScriptletKind) -> (Section<Span>, ParserState) {
+    fn run_scriptlet(
+        src: &str,
+        keyword: &str,
+        kind: ScriptletKind,
+    ) -> (Section<Span>, ParserState) {
         let state = ParserState::new();
         let inp = Input::new(src);
         let (_rest, sec) = parse_scriptlet_section(&state, inp, keyword, kind).unwrap();
@@ -477,8 +481,7 @@ mod tests {
 
     #[test]
     fn post_with_interpreter_path() {
-        let (sec, _) =
-            run_scriptlet("%post -p /sbin/ldconfig\n", "%post", ScriptletKind::Post);
+        let (sec, _) = run_scriptlet("%post -p /sbin/ldconfig\n", "%post", ScriptletKind::Post);
         let s = scriptlet(&sec);
         match s.interp.as_ref().unwrap() {
             Interpreter::Path(t) => assert_eq!(t.literal_str(), Some("/sbin/ldconfig")),
@@ -489,8 +492,11 @@ mod tests {
 
     #[test]
     fn post_with_lua_interpreter() {
-        let (sec, _) =
-            run_scriptlet("%post -p <lua>\nprint('hi')\n", "%post", ScriptletKind::Post);
+        let (sec, _) = run_scriptlet(
+            "%post -p <lua>\nprint('hi')\n",
+            "%post",
+            ScriptletKind::Post,
+        );
         let s = scriptlet(&sec);
         assert!(matches!(s.interp, Some(Interpreter::Lua)));
         assert_eq!(s.body.lines.len(), 1);
@@ -498,8 +504,7 @@ mod tests {
 
     #[test]
     fn post_bare_subpkg() {
-        let (sec, _) =
-            run_scriptlet("%post libfoo\necho hi\n", "%post", ScriptletKind::Post);
+        let (sec, _) = run_scriptlet("%post libfoo\necho hi\n", "%post", ScriptletKind::Post);
         let s = scriptlet(&sec);
         match s.subpkg.as_ref().unwrap() {
             SubpkgRef::Relative(t) => assert_eq!(t.literal_str(), Some("libfoo")),
@@ -509,8 +514,7 @@ mod tests {
 
     #[test]
     fn post_absolute_subpkg() {
-        let (sec, _) =
-            run_scriptlet("%post -n libfoo\necho hi\n", "%post", ScriptletKind::Post);
+        let (sec, _) = run_scriptlet("%post -n libfoo\necho hi\n", "%post", ScriptletKind::Post);
         let s = scriptlet(&sec);
         match s.subpkg.as_ref().unwrap() {
             SubpkgRef::Absolute(t) => assert_eq!(t.literal_str(), Some("libfoo")),
@@ -555,9 +559,12 @@ mod tests {
         let inp = Input::new("%triggerin\necho t\n");
         let (_rest, _sec) =
             parse_trigger_section(&state, inp, "%triggerin", TriggerKind::In).unwrap();
-        assert!(state.snapshot_diagnostics()
-            .iter()
-            .any(|d| d.message.contains("missing `--`")));
+        assert!(
+            state
+                .snapshot_diagnostics()
+                .iter()
+                .any(|d| d.message.contains("missing `--`"))
+        );
     }
 
     #[test]

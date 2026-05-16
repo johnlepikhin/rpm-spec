@@ -15,11 +15,16 @@ use super::{Printer, TokenKind};
 pub(crate) fn print_section<T>(p: &mut Printer<'_>, section: &Section<T>) {
     match section {
         Section::Description { subpkg, body, .. } => print_description(p, subpkg.as_ref(), body),
-        Section::Package { name_arg, content, .. } => print_package(p, name_arg, content),
+        Section::Package {
+            name_arg, content, ..
+        } => print_package(p, name_arg, content),
         Section::BuildScript { kind, body, .. } => print_build_script(p, *kind, body),
-        Section::Files { subpkg, file_lists, content, .. } => {
-            print_files_section(p, subpkg.as_ref(), file_lists, content)
-        }
+        Section::Files {
+            subpkg,
+            file_lists,
+            content,
+            ..
+        } => print_files_section(p, subpkg.as_ref(), file_lists, content),
         Section::Scriptlet(s) => print_scriptlet(p, s),
         Section::Trigger(t) => print_trigger(p, t),
         Section::FileTrigger(ft) => print_file_trigger(p, ft),

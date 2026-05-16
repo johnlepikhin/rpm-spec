@@ -22,10 +22,10 @@ use super::text::Text;
 pub struct Conditional<T, Body> {
     /// First branch is the `%if` / `%ifarch` / `%ifos` head; further branches
     /// correspond to `%elif*` clauses, in source order.
-    pub branches:  Vec<CondBranch<T, Body>>,
+    pub branches: Vec<CondBranch<T, Body>>,
     /// Body of the `%else` branch, if any.
     pub otherwise: Option<Vec<Body>>,
-    pub data:      T,
+    pub data: T,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

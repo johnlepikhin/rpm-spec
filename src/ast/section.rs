@@ -19,14 +19,14 @@ pub enum Section<T = ()> {
     /// `%description [-n] [sub]` — free-form text body.
     Description {
         subpkg: Option<SubpkgRef>,
-        body:   TextBody,
-        data:   T,
+        body: TextBody,
+        data: T,
     },
     /// `%package [-n] sub` — declares a subpackage with its own preamble.
     Package {
         name_arg: PackageName,
-        content:  Vec<PreambleContent<T>>,
-        data:     T,
+        content: Vec<PreambleContent<T>>,
+        data: T,
     },
     /// `%prep` / `%conf` / `%build` / `%install` / `%check` / `%clean` /
     /// `%generate_buildrequires` — shell bodies.
@@ -37,11 +37,11 @@ pub enum Section<T = ()> {
     },
     /// `%files [-n sub] [-f filelist]` — a list of paths plus directives.
     Files {
-        subpkg:     Option<SubpkgRef>,
+        subpkg: Option<SubpkgRef>,
         /// `-f filelist` — repeatable. Each entry is a path (often a macro).
         file_lists: Vec<Text>,
-        content:    Vec<FilesContent<T>>,
-        data:       T,
+        content: Vec<FilesContent<T>>,
+        data: T,
     },
     Scriptlet(Scriptlet<T>),
     Trigger(Trigger<T>),
@@ -49,23 +49,29 @@ pub enum Section<T = ()> {
     /// `%verify [-n sub]` — shell body executed by `rpm --verify`.
     Verify {
         subpkg: Option<SubpkgRef>,
-        body:   ShellBody,
-        data:   T,
+        body: ShellBody,
+        data: T,
     },
     /// `%changelog` — the single global changelog block.
     Changelog {
         entries: Vec<ChangelogEntry<T>>,
-        data:    T,
+        data: T,
     },
     /// `%sourcelist` — alternative to numbered `SourceN:` tags.
-    SourceList { entries: Vec<Text>, data: T },
+    SourceList {
+        entries: Vec<Text>,
+        data: T,
+    },
     /// `%patchlist` — alternative to numbered `PatchN:` tags.
-    PatchList { entries: Vec<Text>, data: T },
+    PatchList {
+        entries: Vec<Text>,
+        data: T,
+    },
     /// `%sepolicy [-n sub]` — SELinux module section (RH family).
     Sepolicy {
         subpkg: Option<SubpkgRef>,
-        body:   ShellBody,
-        data:   T,
+        body: ShellBody,
+        data: T,
     },
 }
 

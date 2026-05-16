@@ -41,8 +41,7 @@ pub use files::{
     FilesContent, VerifyCheck,
 };
 pub use macros::{
-    BuildCondStyle, BuildCondition, Comment, CommentStyle, IncludeDirective, MacroDef,
-    MacroDefKind,
+    BuildCondStyle, BuildCondition, Comment, CommentStyle, IncludeDirective, MacroDef, MacroDefKind,
 };
 pub use preamble::{PreambleContent, PreambleItem, Tag, TagQualifier, TagValue};
 pub use scriptlet::{
@@ -65,7 +64,7 @@ pub struct SpecFile<T = ()> {
     pub items: Vec<SpecItem<T>>,
     /// User-data attached to the root (parser sets [`Span`] covering
     /// the whole input; consumers using `T = ()` get the unit value).
-    pub data:  T,
+    pub data: T,
 }
 
 /// A top-level item in a `.spec` file.

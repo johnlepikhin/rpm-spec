@@ -137,7 +137,10 @@ fn files_conditional_roundtrips_with_indent() {
     let ast1 = parse_to_unit(FILES_WITH_COND);
     let printed = print_with(&ast1, &PrinterConfig::new().with_indent(4));
     // The nested entry inside %if must be indented by 4 spaces.
-    assert!(printed.contains("\n    /usr/bin/fedora-only"), "got:\n{printed}");
+    assert!(
+        printed.contains("\n    /usr/bin/fedora-only"),
+        "got:\n{printed}"
+    );
     let ast2 = parse_to_unit(&printed);
     assert_eq!(ast1, ast2);
 }
@@ -293,11 +296,7 @@ fn classified_writer_concatenates_to_plain_print() {
     let plain = print(&ast);
     let mut capturing = CapturingWriter::default();
     print_to(&ast, &PrinterConfig::default(), &mut capturing);
-    let reconstructed: String = capturing
-        .chunks
-        .iter()
-        .map(|(_, s)| s.as_str())
-        .collect();
+    let reconstructed: String = capturing.chunks.iter().map(|(_, s)| s.as_str()).collect();
     assert_eq!(reconstructed, plain);
 }
 
@@ -347,12 +346,13 @@ echo hi
     let ast = parse_to_unit(src);
     let mut w = CapturingWriter::default();
     print_to(&ast, &PrinterConfig::default(), &mut w);
-    let has = |kind: TokenKind, text: &str| {
+    let has =
+        |kind: TokenKind, text: &str| w.chunks.iter().any(|(k, s)| *k == kind && s.contains(text));
+    assert!(
+        has(TokenKind::TagName, "Name"),
+        "expected (TagName, Name) in {:?}",
         w.chunks
-            .iter()
-            .any(|(k, s)| *k == kind && s.contains(text))
-    };
-    assert!(has(TokenKind::TagName, "Name"), "expected (TagName, Name) in {:?}", w.chunks);
+    );
     assert!(
         has(TokenKind::SectionKeyword, "%description"),
         "expected SectionKeyword for %description in {:?}",

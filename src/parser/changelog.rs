@@ -134,8 +134,8 @@ pub fn parse_changelog_entry<'a>(
         return Err(nom::Err::Error(error_position!(input, ErrorKind::Tag)));
     }
     // Strip the leading `*` + whitespace.
-    let after_star =
-        advance(after_ws, 1).ok_or_else(|| nom::Err::Error(error_position!(input, ErrorKind::Tag)))?;
+    let after_star = advance(after_ws, 1)
+        .ok_or_else(|| nom::Err::Error(error_position!(input, ErrorKind::Tag)))?;
     let (after_star_ws, _) = space0(after_star)?;
 
     let header_start = after_star_ws;
@@ -390,7 +390,10 @@ mod tests {
         assert_eq!(e.date.day, 14);
         assert_eq!(e.date.year, 2025);
         assert_eq!(e.author.literal_str(), Some("Maintainer"));
-        assert_eq!(e.email.as_ref().unwrap().literal_str(), Some("m@example.org"));
+        assert_eq!(
+            e.email.as_ref().unwrap().literal_str(),
+            Some("m@example.org")
+        );
         assert_eq!(e.version.as_ref().unwrap().literal_str(), Some("1.0-1"));
         assert_eq!(e.body.len(), 1);
         assert_eq!(e.body[0].literal_str(), Some("- initial packaging"));
@@ -402,7 +405,10 @@ mod tests {
         let sec = parse(src);
         let es = entries(&sec);
         assert!(es[0].version.is_none());
-        assert_eq!(es[0].email.as_ref().unwrap().literal_str(), Some("a@example.com"));
+        assert_eq!(
+            es[0].email.as_ref().unwrap().literal_str(),
+            Some("a@example.com")
+        );
     }
 
     #[test]

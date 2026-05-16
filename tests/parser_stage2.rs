@@ -2,8 +2,8 @@
 //! `%description`, `%package`.
 
 use rpm_spec::ast::{
-    BoolDep, DepExpr, PackageName, PreambleContent, Section, SpecItem, Tag, TagQualifier,
-    TagValue, VerOp,
+    BoolDep, DepExpr, PackageName, PreambleContent, Section, SpecItem, Tag, TagQualifier, TagValue,
+    VerOp,
 };
 use rpm_spec::parser::parse_str;
 
@@ -72,8 +72,16 @@ fn canonical_spec_parses_preamble_structurally() {
     assert!(name_items.iter().any(|p| matches!(p.tag, Tag::License)));
     assert!(name_items.iter().any(|p| matches!(p.tag, Tag::URL)));
     assert!(name_items.iter().any(|p| matches!(p.tag, Tag::BuildArch)));
-    assert!(name_items.iter().any(|p| matches!(p.tag, Tag::Source(Some(0)))));
-    assert!(name_items.iter().any(|p| matches!(p.tag, Tag::Patch(Some(0)))));
+    assert!(
+        name_items
+            .iter()
+            .any(|p| matches!(p.tag, Tag::Source(Some(0))))
+    );
+    assert!(
+        name_items
+            .iter()
+            .any(|p| matches!(p.tag, Tag::Patch(Some(0))))
+    );
 }
 
 #[test]
@@ -115,18 +123,13 @@ fn qualifier_list_preserved() {
         .items
         .iter()
         .find_map(|i| match i {
-            SpecItem::Preamble(p)
-                if matches!(p.tag, Tag::Requires) && !p.qualifiers.is_empty() =>
-            {
+            SpecItem::Preamble(p) if matches!(p.tag, Tag::Requires) && !p.qualifiers.is_empty() => {
                 Some(p)
             }
             _ => None,
         })
         .expect("Requires(post,postun) line not found");
-    assert_eq!(
-        q.qualifiers,
-        vec![TagQualifier::Post, TagQualifier::Postun]
-    );
+    assert_eq!(q.qualifiers, vec![TagQualifier::Post, TagQualifier::Postun]);
 }
 
 #[test]
@@ -181,9 +184,7 @@ fn file_dep_is_atom() {
         .iter()
         .find_map(|i| match i {
             SpecItem::Preamble(p) => match &p.value {
-                TagValue::Dep(DepExpr::Atom(a))
-                    if a.name.literal_str() == Some("/usr/bin/awk") =>
-                {
+                TagValue::Dep(DepExpr::Atom(a)) if a.name.literal_str() == Some("/usr/bin/awk") => {
                     Some(a)
                 }
                 _ => None,
@@ -247,7 +248,9 @@ fn package_subpackage_with_nested_preamble() {
         .iter()
         .find_map(|i| match i {
             SpecItem::Section(s) => match s.as_ref() {
-                Section::Package { name_arg, content, .. } => Some((name_arg.clone(), content.clone())),
+                Section::Package {
+                    name_arg, content, ..
+                } => Some((name_arg.clone(), content.clone())),
                 _ => None,
             },
             _ => None,
@@ -265,7 +268,11 @@ fn package_subpackage_with_nested_preamble() {
             _ => None,
         })
         .collect();
-    assert_eq!(items.len(), 3, "Summary + License + Requires inside %package");
+    assert_eq!(
+        items.len(),
+        3,
+        "Summary + License + Requires inside %package"
+    );
     assert!(items.iter().any(|p| matches!(p.tag, Tag::Summary)));
     assert!(items.iter().any(|p| matches!(p.tag, Tag::License)));
     assert!(items.iter().any(|p| matches!(p.tag, Tag::Requires)));

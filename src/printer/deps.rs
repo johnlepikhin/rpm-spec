@@ -61,7 +61,11 @@ fn print_rich(p: &mut Printer<'_>, b: &BoolDep) {
             p.raw(" without ");
             print_dep_expr(p, right);
         }
-        BoolDep::If { cond, then, otherwise } => {
+        BoolDep::If {
+            cond,
+            then,
+            otherwise,
+        } => {
             print_dep_expr(p, then);
             p.raw(" if ");
             print_dep_expr(p, cond);
@@ -70,7 +74,11 @@ fn print_rich(p: &mut Printer<'_>, b: &BoolDep) {
                 print_dep_expr(p, o);
             }
         }
-        BoolDep::Unless { cond, then, otherwise } => {
+        BoolDep::Unless {
+            cond,
+            then,
+            otherwise,
+        } => {
             print_dep_expr(p, then);
             p.raw(" unless ");
             print_dep_expr(p, cond);
@@ -149,7 +157,10 @@ mod tests {
                 },
             }),
         };
-        assert_eq!(render(&DepExpr::Atom(a)), "perl-DBI(x86-64) = 9:1.643-1.fc40");
+        assert_eq!(
+            render(&DepExpr::Atom(a)),
+            "perl-DBI(x86-64) = 9:1.643-1.fc40"
+        );
     }
 
     #[test]

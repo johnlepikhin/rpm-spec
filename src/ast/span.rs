@@ -17,17 +17,17 @@
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Span {
     /// Inclusive byte offset of the first byte covered by this span.
-    pub start_byte:   usize,
+    pub start_byte: usize,
     /// Exclusive byte offset just past the last byte covered.
-    pub end_byte:     usize,
+    pub end_byte: usize,
     /// 1-based line number where the span starts.
-    pub start_line:   u32,
+    pub start_line: u32,
     /// 1-based byte column on `start_line` where the span starts.
     pub start_column: u32,
     /// 1-based line number where the span ends.
-    pub end_line:     u32,
+    pub end_line: u32,
     /// 1-based byte column on `end_line` where the span ends.
-    pub end_column:   u32,
+    pub end_column: u32,
 }
 
 impl Span {
@@ -41,15 +41,28 @@ impl Span {
         end_line: u32,
         end_column: u32,
     ) -> Self {
-        debug_assert!(start_byte <= end_byte, "Span::new: start_byte must be <= end_byte");
-        Self { start_byte, end_byte, start_line, start_column, end_line, end_column }
+        debug_assert!(
+            start_byte <= end_byte,
+            "Span::new: start_byte must be <= end_byte"
+        );
+        Self {
+            start_byte,
+            end_byte,
+            start_line,
+            start_column,
+            end_line,
+            end_column,
+        }
     }
 
     /// Build a span that covers only a byte range, leaving line/column zero.
     /// Useful in tests and for callers that do not track lines.
     #[must_use]
     pub const fn from_bytes(start_byte: usize, end_byte: usize) -> Self {
-        debug_assert!(start_byte <= end_byte, "Span::from_bytes: start_byte must be <= end_byte");
+        debug_assert!(
+            start_byte <= end_byte,
+            "Span::from_bytes: start_byte must be <= end_byte"
+        );
         Self {
             start_byte,
             end_byte,
@@ -63,7 +76,10 @@ impl Span {
     /// Length in bytes. Relies on the `start_byte <= end_byte` invariant.
     #[must_use]
     pub const fn len(&self) -> usize {
-        debug_assert!(self.start_byte <= self.end_byte, "Span::len: invariant violated");
+        debug_assert!(
+            self.start_byte <= self.end_byte,
+            "Span::len: invariant violated"
+        );
         self.end_byte - self.start_byte
     }
 
