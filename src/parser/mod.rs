@@ -29,5 +29,5 @@ pub mod util;
 mod entry;
 
 pub use entry::{parse_str, parse_str_with_spans};
-pub use input::{Input, span_at, span_between};
+pub use input::{Input, span_at, span_between, span_for_line};
 pub use state::{ParserConfig, ParserState};

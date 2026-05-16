@@ -55,11 +55,59 @@ pub fn span_at(cursor: &Input<'_>) -> Span {
 /// `\r\n`). We can't just use `span_between(start, after_line)` because
 /// `after_line` sits on the *next* line — that would render in
 /// `codespan` as a multi-line carat covering the unrelated line below.
+///
+/// Columns are **byte offsets** within the line, matching the
+/// [`Span`] documented convention and `nom_locate::get_column()`.
+/// Using `chars().count()` here would misalign the underline on lines
+/// containing multibyte UTF-8 (e.g. a Cyrillic `Summary:` value).
 pub fn span_for_line(start: &Input<'_>, text: &Input<'_>) -> Span {
     let start_byte = start.location_offset();
     let end_byte = text.location_offset() + text.fragment().len();
     let line = start.location_line();
     let start_col = start.get_column() as u32;
-    let end_col = start_col + text.fragment().chars().count() as u32;
+    let end_col = start_col + text.fragment().len() as u32;
     Span::new(start_byte, end_byte, line, start_col, line, end_col)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::util::physical_line;
+
+    #[test]
+    fn span_for_line_ascii_byte_columns() {
+        let s = Input::new("hello world\nrest");
+        let (_rest, text) = physical_line(s).unwrap();
+        let span = span_for_line(&s, &text);
+        assert_eq!(span.start_byte, 0);
+        assert_eq!(span.end_byte, 11);
+        assert_eq!(span.start_line, 1);
+        assert_eq!(span.end_line, 1);
+        assert_eq!(span.start_column, 1);
+        assert_eq!(span.end_column, 12);
+    }
+
+    #[test]
+    fn span_for_line_utf8_uses_byte_columns() {
+        // Three Greek letters: each takes 2 bytes in UTF-8, total 6 bytes,
+        // 3 characters. Columns are documented as byte offsets — using
+        // `chars().count()` would yield `end_column = start_column + 3`,
+        // misaligning the codespan underline by 3 cells.
+        let s = Input::new("αβγ\nrest");
+        let (_rest, text) = physical_line(s).unwrap();
+        let span = span_for_line(&s, &text);
+        assert_eq!(span.end_byte - span.start_byte, 6);
+        assert_eq!(span.end_column - span.start_column, 6);
+    }
+
+    #[test]
+    fn span_for_line_stops_before_newline() {
+        // The span must not include the trailing `\n` — otherwise the
+        // codespan carat overlaps the next physical line.
+        let s = Input::new("first\nsecond\n");
+        let (_rest, text) = physical_line(s).unwrap();
+        let span = span_for_line(&s, &text);
+        assert_eq!(span.end_byte, 5);
+        assert_eq!(span.start_line, span.end_line);
+    }
 }

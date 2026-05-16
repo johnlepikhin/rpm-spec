@@ -493,6 +493,23 @@ mod tests {
     }
 
     #[test]
+    fn post_absolute_subpkg_macro_suffix() {
+        // Regression: kernel.spec and friends use
+        // `%post -n %{name}-modules`. The header must accept a macro
+        // segment followed by a literal suffix.
+        let (sec, _) = run_scriptlet(
+            "%post -n %{shortname}-sub1\necho hi\n",
+            "%post",
+            ScriptletKind::Post,
+        );
+        let s = scriptlet(&sec);
+        match s.subpkg.as_ref().unwrap() {
+            SubpkgRef::Absolute(t) => assert!(t.segments.len() >= 2),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
     fn post_with_flags_eqf() {
         let (sec, _) = run_scriptlet(
             "%post -e -q -f /tmp/body.sh\n",

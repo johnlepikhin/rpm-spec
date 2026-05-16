@@ -80,7 +80,7 @@ fn collect_entries<'a>(
             // Body bullets ` * foo` / ` - foo` / `  text` were being
             // misread as malformed headers; we now treat them as
             // continuation noise and stay silent.
-            if !line_is_blank(here.fragment()) && !line_looks_like_body_continuation(here.fragment()) {
+            if !line_is_blank(here.fragment()) && !is_indented_nonblank_line(here.fragment()) {
                 state.push_warning_code(
                     codes::W_UNEXPECTED_LINE_IN_CHANGELOG,
                     "unexpected line outside a %changelog entry",
@@ -126,20 +126,17 @@ fn line_is_blank(s: &str) -> bool {
     line.trim().is_empty()
 }
 
-/// `true` when the line looks like a free-form continuation of the
-/// previous entry's body (`- bullet`, `* indented bullet`, plain
-/// indented text). The W0023 lint used to fire on these because the
-/// caller stripped leading whitespace before probing for `*`.
-fn line_looks_like_body_continuation(s: &str) -> bool {
+/// `true` when the line starts with whitespace **and** has any
+/// non-whitespace content — i.e. it's an indented body line of the
+/// previous changelog entry (bullets like ` - foo`, ` * bar`, or plain
+/// continuation prose). Header lines must put `*` in column 1, so
+/// anything indented is by definition a body continuation. W0023 used
+/// to flag these because the caller stripped leading whitespace before
+/// probing for `*`.
+fn is_indented_nonblank_line(s: &str) -> bool {
     let line = s.split(['\n', '\r']).next().unwrap_or(s);
-    let trimmed_start_len = line.len() - line.trim_start().len();
-    if trimmed_start_len == 0 {
-        // No leading whitespace; can't be a continuation by our rule.
-        // (Header lines start at column 1 with `*` — handled above.)
-        return false;
-    }
     let trimmed = line.trim_start();
-    trimmed.starts_with('-') || trimmed.starts_with('*') || !trimmed.is_empty()
+    !trimmed.is_empty() && trimmed.len() != line.len()
 }
 
 /// Parse one `%changelog` entry (header + body lines).

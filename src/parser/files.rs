@@ -601,6 +601,24 @@ mod tests {
     }
 
     #[test]
+    fn header_with_subpkg_absolute_macro_suffix() {
+        // Regression: real-world specs such as samba.spec use
+        // `%files -n python3-%{name}`. The header must accept a macro
+        // segment followed by a literal suffix instead of bailing out
+        // (which would attribute the body lines to the wrong package).
+        let s = parse_files("%files -n %{shortname}-sub1\n%{_bindir}/foo\n");
+        match s {
+            AstSection::Files {
+                subpkg: Some(SubpkgRef::Absolute(t)),
+                ..
+            } => {
+                assert!(t.segments.len() >= 2);
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
     fn header_with_filelist() {
         let s = parse_files("%files -f files.list\n");
         match s {
