@@ -23,14 +23,14 @@ use nom::{IResult, error::ErrorKind, error_position};
 
 use crate::ast::{
     DepExpr, FileTrigger, FileTriggerKind, Interpreter, Scriptlet, ScriptletKind, Section, Span,
-    SubpkgRef, Text, TextSegment, Trigger, TriggerKind,
+    SubpkgRef, Text, Trigger, TriggerKind,
 };
 use crate::parse_result::codes;
 
 use super::deps::parse_dep_expr;
 use super::input::{Input, span_at, span_between};
 use super::preamble::split_dep_list;
-use super::section::collect_shell_body_until_section_header;
+use super::section::{collect_shell_body_until_section_header, take_name_with_macros};
 use super::state::ParserState;
 use super::text::parse_body_as_text;
 use super::util::{line_terminator, space0};
@@ -203,9 +203,9 @@ fn parse_header<'a>(
                 .ok_or_else(|| nom::Err::Error(error_position!(input, ErrorKind::Tag)))?;
             let (after_ws2, _) = space0(cursor)?;
             cursor = after_ws2;
-            match take_ident_token(cursor) {
+            match take_name_with_macros(state, cursor) {
                 Some((after_name, name)) => {
-                    opts.subpkg = Some(SubpkgRef::Absolute(text_literal(name)));
+                    opts.subpkg = Some(SubpkgRef::Absolute(name));
                     cursor = after_name;
                 }
                 None => {
@@ -281,9 +281,9 @@ fn parse_header<'a>(
         } else if opts.subpkg.is_none() && !frag.starts_with('-') {
             // Bare subpackage name (relative form) — only allowed as the
             // first non-flag token.
-            match take_ident_token(cursor) {
+            match take_name_with_macros(state, cursor) {
                 Some((after_name, name)) => {
-                    opts.subpkg = Some(SubpkgRef::Relative(text_literal(name)));
+                    opts.subpkg = Some(SubpkgRef::Relative(name));
                     cursor = after_name;
                 }
                 None => break,
@@ -354,30 +354,6 @@ fn is_flag_boundary(frag: &str, idx: usize) -> bool {
     )
 }
 
-fn take_ident_token<'a>(input: Input<'a>) -> Option<(Input<'a>, &'a str)> {
-    let frag = *input.fragment();
-    let mut iter = frag.char_indices();
-    let (_, first) = iter.next()?;
-    if !is_ident_char(first) {
-        return None;
-    }
-    let mut end = first.len_utf8();
-    for (i, c) in iter {
-        if is_ident_char(c) {
-            end = i + c.len_utf8();
-        } else {
-            break;
-        }
-    }
-    let (rest, _) = nom::Input::take_split(&input, end);
-    Some((rest, &frag[..end]))
-}
-
-#[inline]
-fn is_ident_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '+'
-}
-
 fn take_path_token<'a>(input: Input<'a>) -> Option<(Input<'a>, &'a str)> {
     let frag = *input.fragment();
     let mut iter = frag.char_indices();
@@ -418,12 +394,6 @@ fn advance<'a>(input: Input<'a>, n: usize) -> Option<Input<'a>> {
     }
     let (rest, _) = nom::Input::take_split(&input, n);
     Some(rest)
-}
-
-fn text_literal(s: &str) -> Text {
-    Text {
-        segments: vec![TextSegment::Literal(s.to_owned())],
-    }
 }
 
 fn first_word(s: &str) -> &str {

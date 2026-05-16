@@ -4,7 +4,7 @@ use crate::ast::{Comment, CommentStyle, Span, SpecFile, SpecItem, Text};
 use crate::parse_result::{ParseResult, codes};
 
 use super::cond::parse_conditional;
-use super::input::{Input, span_at, span_between};
+use super::input::{Input, span_at, span_between, span_for_line};
 use super::macros::{parse_hash_comment, parse_top_macro_call, parse_top_macro_statement};
 use super::preamble::parse_preamble_line;
 use super::section::{parse_section, peek_section_header};
@@ -125,7 +125,7 @@ pub fn parse_str_with_spans(input: &str) -> ParseResult<Span> {
 
         // Unrecognized line.
         let here = cursor;
-        let (after_line, _) = match physical_line(cursor) {
+        let (after_line, line_text) = match physical_line(cursor) {
             Ok(r) => r,
             Err(_) => break,
         };
@@ -140,7 +140,11 @@ pub fn parse_str_with_spans(input: &str) -> ParseResult<Span> {
         state.push_warning_code(
             codes::W_LINE_NOT_RECOGNIZED,
             "line not recognized",
-            Some(span_between(&here, &after_line)),
+            // Span the *line content only*, not the trailing newline —
+            // otherwise the carat in `codespan` output overlaps the
+            // next physical line and confuses users (see P5 in the
+            // P1-fix audit notes).
+            Some(span_for_line(&here, &line_text)),
         );
         cursor = after_line;
     }

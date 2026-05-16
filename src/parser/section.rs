@@ -15,10 +15,10 @@ use crate::ast::{
 };
 use crate::parse_result::codes;
 
-use super::input::{Input, span_at, span_between};
+use super::input::{Input, span_at, span_between, span_for_line};
 use super::preamble::parse_preamble_content;
 use super::state::ParserState;
-use super::text::parse_body_as_text;
+use super::text::{parse_body_as_text, parse_text};
 use super::util::{line_terminator, physical_line, space0, space1};
 
 /// Section header names that introduce a top-level section. Order does
@@ -351,7 +351,7 @@ fn parse_verify_section<'a>(
     let start = input;
     let (after_ws, _) = space0(input)?;
     let (after_kw, _) = nom::Input::take_split(&after_ws, "%verify".len());
-    let (after_args, subpkg) = parse_header_args(after_kw);
+    let (after_args, subpkg) = parse_header_args(state, after_kw);
     let (after_header, _) = line_terminator(after_args)?;
     let (after_body, body) = collect_shell_body_until_section_header(state, after_header);
     let span = span_between(&start, &after_body);
@@ -376,7 +376,7 @@ fn parse_sepolicy_section<'a>(
     let start = input;
     let (after_ws, _) = space0(input)?;
     let (after_kw, _) = nom::Input::take_split(&after_ws, "%sepolicy".len());
-    let (after_args, subpkg) = parse_header_args(after_kw);
+    let (after_args, subpkg) = parse_header_args(state, after_kw);
     let (after_header, _) = line_terminator(after_args)?;
     let (after_body, body) = collect_shell_body_until_section_header(state, after_header);
     let span = span_between(&start, &after_body);
@@ -459,7 +459,7 @@ fn parse_description_section<'a>(
     let start = input;
     let (after_ws, _) = space0(input)?;
     let (after_kw, _) = nom::Input::take_split(&after_ws, "%description".len());
-    let (after_args, subpkg) = parse_header_args(after_kw);
+    let (after_args, subpkg) = parse_header_args(state, after_kw);
     let (after_header, _) = line_terminator(after_args)?;
 
     let (after_body, body) = collect_text_body_until_section_header(state, after_header);
@@ -529,7 +529,7 @@ fn parse_package_section<'a>(
     let (after_kw, _) = nom::Input::take_split(&after_ws, "%package".len());
 
     // %package requires a name argument.
-    let (after_args, subpkg) = parse_header_args(after_kw);
+    let (after_args, subpkg) = parse_header_args(state, after_kw);
     let name_arg = match subpkg {
         Some(SubpkgRef::Absolute(t)) => PackageName::Absolute(t),
         Some(SubpkgRef::Relative(t)) => PackageName::Relative(t),
@@ -584,7 +584,7 @@ fn collect_package_body<'a>(
                 // physical line with a warning so the body parser stays
                 // productive.
                 let here = cursor;
-                let (after, _) = match physical_line(here) {
+                let (after, line_text) = match physical_line(here) {
                     Ok(r) => r,
                     Err(_) => break,
                 };
@@ -594,7 +594,7 @@ fn collect_package_body<'a>(
                 state.push_warning_code(
                     codes::W_LINE_NOT_RECOGNIZED_IN_PACKAGE,
                     "line not recognized inside %package body",
-                    Some(span_between(&here, &after)),
+                    Some(span_for_line(&here, &line_text)),
                 );
                 cursor = after;
             }
@@ -608,7 +608,10 @@ fn collect_package_body<'a>(
 // `-n NAME` and bare-NAME header argument parsing
 // ---------------------------------------------------------------------
 
-fn parse_header_args<'a>(input: Input<'a>) -> (Input<'a>, Option<SubpkgRef>) {
+fn parse_header_args<'a>(
+    state: &ParserState,
+    input: Input<'a>,
+) -> (Input<'a>, Option<SubpkgRef>) {
     // Consume optional inline whitespace.
     let (cursor, _) = match space0(input) {
         Ok(r) => r,
@@ -625,28 +628,43 @@ fn parse_header_args<'a>(input: Input<'a>) -> (Input<'a>, Option<SubpkgRef>) {
             Ok(r) => r,
             Err(_) => return (cursor, None),
         };
-        match take_ident_token(after_ws) {
-            Some((after_name, name)) => (
-                after_name,
-                Some(SubpkgRef::Absolute(Text {
-                    segments: vec![TextSegment::Literal(name.to_owned())],
-                })),
-            ),
+        match take_name_with_macros(state, after_ws) {
+            Some((after_name, name)) => (after_name, Some(SubpkgRef::Absolute(name))),
             None => (cursor, None),
         }
     } else if frag.is_empty() || frag.starts_with('\n') || frag.starts_with('\r') {
         // No args at all — e.g. `%description` for the main package.
         (cursor, None)
     } else {
-        match take_ident_token(cursor) {
-            Some((after_name, name)) => (
-                after_name,
-                Some(SubpkgRef::Relative(Text {
-                    segments: vec![TextSegment::Literal(name.to_owned())],
-                })),
-            ),
+        match take_name_with_macros(state, cursor) {
+            Some((after_name, name)) => (after_name, Some(SubpkgRef::Relative(name))),
             None => (cursor, None),
         }
+    }
+}
+
+/// Parse a section name argument that may contain macro references like
+/// `%{shortname}-sub1`. Stops at whitespace, EOL, or EOF. Returns `None`
+/// when the cursor sits on a terminator (no name to consume).
+pub(crate) fn take_name_with_macros<'a>(
+    state: &ParserState,
+    input: Input<'a>,
+) -> Option<(Input<'a>, Text)> {
+    let frag = *input.fragment();
+    let first = frag.chars().next()?;
+    if matches!(first, ' ' | '\t' | '\n' | '\r') {
+        return None;
+    }
+    let is_terminator = |c: char| matches!(c, ' ' | '\t' | '\n' | '\r');
+    match parse_text(state, input, &is_terminator) {
+        Ok((rest, text)) => {
+            if text.segments.is_empty() {
+                None
+            } else {
+                Some((rest, text))
+            }
+        }
+        Err(_) => None,
     }
 }
 
@@ -656,33 +674,6 @@ fn advance_str<'a>(input: Input<'a>, n: usize) -> Option<Input<'a>> {
     }
     let (rest, _) = nom::Input::take_split(&input, n);
     Some(rest)
-}
-
-fn take_ident_token<'a>(input: Input<'a>) -> Option<(Input<'a>, &'a str)> {
-    let frag = *input.fragment();
-    let mut iter = frag.char_indices();
-    let (_, first) = iter.next()?;
-    if !is_ident_token_char(first) {
-        return None;
-    }
-    let mut end = first.len_utf8();
-    for (i, c) in iter {
-        if is_ident_token_char(c) {
-            end = i + c.len_utf8();
-        } else {
-            break;
-        }
-    }
-    if end == 0 {
-        return None;
-    }
-    let (rest, _) = nom::Input::take_split(&input, end);
-    Some((rest, &frag[..end]))
-}
-
-#[inline]
-fn is_ident_token_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '+'
 }
 
 #[cfg(test)]
@@ -733,6 +724,53 @@ mod tests {
                 SubpkgRef::Absolute(t) => assert_eq!(t.literal_str(), Some("libfoo")),
                 _ => panic!(),
             },
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn description_subpkg_with_macro_suffix() {
+        // Regression: real-world specs like texlive-base.spec use
+        // `%description -n %{shortname}-sub1`. The header argument must
+        // accept macro segments, not only literal identifiers.
+        let s = parse(
+            "%description -n %{shortname}-sub1\nbody one\nbody two\n",
+        );
+        match s {
+            Section::Description { subpkg, body, .. } => {
+                match subpkg.expect("subpkg parsed") {
+                    SubpkgRef::Absolute(t) => {
+                        assert_eq!(t.segments.len(), 2);
+                        assert!(matches!(&t.segments[0], TextSegment::Macro(_)));
+                        assert!(
+                            matches!(&t.segments[1], TextSegment::Literal(s) if s == "-sub1")
+                        );
+                    }
+                    _ => panic!(),
+                }
+                assert_eq!(body.lines.len(), 2);
+                assert_eq!(body.lines[0].literal_str(), Some("body one"));
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn package_subpkg_with_macro_suffix() {
+        let s = parse("%package -n %{shortname}-sub1\nSummary: x\n");
+        match s {
+            Section::Package {
+                name_arg, content, ..
+            } => {
+                match name_arg {
+                    PackageName::Absolute(t) => {
+                        assert_eq!(t.segments.len(), 2);
+                        assert!(matches!(&t.segments[0], TextSegment::Macro(_)));
+                    }
+                    _ => panic!(),
+                }
+                assert_eq!(content.len(), 1);
+            }
             _ => panic!(),
         }
     }

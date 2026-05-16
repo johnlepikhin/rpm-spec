@@ -54,14 +54,15 @@ fn collect_entries<'a>(
         if peek_section_header(cursor).is_some() {
             break;
         }
-        // Skip blank lines between entries.
-        let (after_ws, _) = match space0(cursor) {
-            Ok(r) => r,
-            Err(_) => break,
-        };
-        let frag = *after_ws.fragment();
+        // RPM changelog grammar: each entry header MUST start with `*`
+        // in column 1. Lines beginning with leading whitespace —
+        // typical body bullets like ` * release notes` or `  - url` —
+        // are entry continuations, not new headers. Don't consume
+        // whitespace before the start-of-entry probe; the previous
+        // logic mistakenly accepted indented `*` as header-starts
+        // and triggered W0023 on innocent prose.
+        let frag = *cursor.fragment();
         if frag.is_empty() {
-            cursor = after_ws;
             break;
         }
         if !frag.starts_with('*') {
@@ -75,8 +76,11 @@ fn collect_entries<'a>(
             if after.location_offset() == here.location_offset() {
                 break;
             }
-            // Only complain about non-blank stray lines.
-            if !line_is_blank(here.fragment()) {
+            // Only complain about non-blank, non-bullet stray lines.
+            // Body bullets ` * foo` / ` - foo` / `  text` were being
+            // misread as malformed headers; we now treat them as
+            // continuation noise and stay silent.
+            if !line_is_blank(here.fragment()) && !line_looks_like_body_continuation(here.fragment()) {
                 state.push_warning_code(
                     codes::W_UNEXPECTED_LINE_IN_CHANGELOG,
                     "unexpected line outside a %changelog entry",
@@ -120,6 +124,22 @@ fn collect_entries<'a>(
 fn line_is_blank(s: &str) -> bool {
     let line = s.split(['\n', '\r']).next().unwrap_or(s);
     line.trim().is_empty()
+}
+
+/// `true` when the line looks like a free-form continuation of the
+/// previous entry's body (`- bullet`, `* indented bullet`, plain
+/// indented text). The W0023 lint used to fire on these because the
+/// caller stripped leading whitespace before probing for `*`.
+fn line_looks_like_body_continuation(s: &str) -> bool {
+    let line = s.split(['\n', '\r']).next().unwrap_or(s);
+    let trimmed_start_len = line.len() - line.trim_start().len();
+    if trimmed_start_len == 0 {
+        // No leading whitespace; can't be a continuation by our rule.
+        // (Header lines start at column 1 with `*` — handled above.)
+        return false;
+    }
+    let trimmed = line.trim_start();
+    trimmed.starts_with('-') || trimmed.starts_with('*') || !trimmed.is_empty()
 }
 
 /// Parse one `%changelog` entry (header + body lines).

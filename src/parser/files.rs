@@ -25,14 +25,14 @@ use nom::{IResult, error::ErrorKind, error_position};
 
 use crate::ast::{
     AttrField, AttrFields, ConfigFlag, DefattrFields, FileDirective, FileEntry, FilePath,
-    FilesContent, Section, Span, SpecItem, SubpkgRef, Text, TextSegment, VerifyCheck,
+    FilesContent, Section, Span, SpecItem, SubpkgRef, Text, VerifyCheck,
 };
 use crate::parse_result::codes;
 
 use super::cond::parse_conditional;
-use super::input::{Input, span_at, span_between};
+use super::input::{Input, span_at, span_between, span_for_line};
 use super::macros::parse_hash_comment;
-use super::section::peek_section_header;
+use super::section::{peek_section_header, take_name_with_macros};
 use super::state::ParserState;
 use super::text::parse_body_as_text;
 use super::util::{blank_line, line_terminator, physical_line, space0};
@@ -131,7 +131,7 @@ fn collect_files_body<'a>(
             }
             Err(_) => {
                 let here = cursor;
-                let (after, _) = match physical_line(here) {
+                let (after, line_text) = match physical_line(here) {
                     Ok(r) => r,
                     Err(_) => break,
                 };
@@ -141,7 +141,7 @@ fn collect_files_body<'a>(
                 state.push_warning_code(
                     codes::W_LINE_NOT_RECOGNIZED_IN_FILES,
                     "line not recognized inside %files body",
-                    Some(span_between(&here, &after)),
+                    Some(span_for_line(&here, &line_text)),
                 );
                 cursor = after;
             }
@@ -180,9 +180,9 @@ fn parse_files_header<'a>(
             };
             let (after_ws2, _) = space0(cursor)?;
             cursor = after_ws2;
-            match take_ident_token(cursor) {
+            match take_name_with_macros(state, cursor) {
                 Some((after_name, name)) => {
-                    subpkg = Some(SubpkgRef::Absolute(text_literal(name)));
+                    subpkg = Some(SubpkgRef::Absolute(name));
                     cursor = after_name;
                 }
                 None => {
@@ -217,9 +217,9 @@ fn parse_files_header<'a>(
             }
         } else if subpkg.is_none() {
             // Bare subpackage name (relative form).
-            match take_ident_token(cursor) {
+            match take_name_with_macros(state, cursor) {
                 Some((after_name, name)) => {
-                    subpkg = Some(SubpkgRef::Relative(text_literal(name)));
+                    subpkg = Some(SubpkgRef::Relative(name));
                     cursor = after_name;
                 }
                 None => break,
@@ -515,28 +515,6 @@ fn advance<'a>(input: Input<'a>, n: usize) -> Option<Input<'a>> {
     Some(rest)
 }
 
-fn take_ident_token<'a>(input: Input<'a>) -> Option<(Input<'a>, &'a str)> {
-    let frag = *input.fragment();
-    let mut iter = frag.char_indices();
-    let (_, first) = iter.next()?;
-    if !is_ident_char(first) {
-        return None;
-    }
-    let mut end = first.len_utf8();
-    for (i, c) in iter {
-        if is_ident_char(c) {
-            end = i + c.len_utf8();
-        } else {
-            break;
-        }
-    }
-    if end == 0 {
-        return None;
-    }
-    let (rest, _) = nom::Input::take_split(&input, end);
-    Some((rest, &frag[..end]))
-}
-
 fn take_path_token<'a>(input: Input<'a>) -> Option<(Input<'a>, &'a str)> {
     let frag = *input.fragment();
     let mut iter = frag.char_indices();
@@ -555,21 +533,10 @@ fn take_path_token<'a>(input: Input<'a>) -> Option<(Input<'a>, &'a str)> {
     Some((rest, &frag[..end]))
 }
 
-#[inline]
-fn is_ident_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '+'
-}
-
-fn text_literal(s: &str) -> Text {
-    Text {
-        segments: vec![TextSegment::Literal(s.to_owned())],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::Section as AstSection;
+    use crate::ast::{Section as AstSection, TextSegment};
 
     fn parse_files(src: &str) -> Section<Span> {
         let state = ParserState::new();

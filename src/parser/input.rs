@@ -46,3 +46,20 @@ pub fn span_at(cursor: &Input<'_>) -> Span {
     let col = cursor.get_column() as u32;
     Span::new(byte, byte, line, col, line, col)
 }
+
+/// Build a [`Span`] over a single line's text, **excluding** the
+/// trailing line-ending bytes.
+///
+/// `start` is the cursor at the beginning of the line; `text` is the
+/// `not_line_ending` capture (i.e. the line content without `\n` or
+/// `\r\n`). We can't just use `span_between(start, after_line)` because
+/// `after_line` sits on the *next* line — that would render in
+/// `codespan` as a multi-line carat covering the unrelated line below.
+pub fn span_for_line(start: &Input<'_>, text: &Input<'_>) -> Span {
+    let start_byte = start.location_offset();
+    let end_byte = text.location_offset() + text.fragment().len();
+    let line = start.location_line();
+    let start_col = start.get_column() as u32;
+    let end_col = start_col + text.fragment().chars().count() as u32;
+    Span::new(start_byte, end_byte, line, start_col, line, end_col)
+}
