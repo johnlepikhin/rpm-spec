@@ -6,6 +6,34 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
+## 0.3.4
+
+### Fixed
+
+- `span_for_line` now uses **byte** offsets for both `start_column` and
+  `end_column`, matching the `Span` documented convention and
+  `nom_locate::get_column()`. Previously `end_column` was computed from
+  `chars().count()`, which under-counted on lines containing multibyte
+  UTF-8 (e.g. a Cyrillic `Summary:` value or non-ASCII author names in
+  `%changelog`) and misaligned the `codespan` underline.
+- `is_indented_nonblank_line` (formerly
+  `line_looks_like_body_continuation`) collapsed to a single
+  `!trimmed.is_empty() && indented` check. The previous shape held
+  unreachable `starts_with('-')` / `starts_with('*')` arms masked by a
+  trailing `!trimmed.is_empty()`.
+
+### Added
+
+- `span_for_line` is now re-exported from `parser::*` (was reachable
+  only via `parser::input::span_for_line` despite being `pub`). External
+  sub-parsers building diagnostic spans can use it without reaching
+  into the `input` module.
+- Regression unit tests for macro-bearing subpackage names in
+  `%files -n %{macro}-suffix` (`parser/files.rs`) and
+  `%post -n %{macro}-suffix` (`parser/scriptlet.rs`).
+- Unit tests for `span_for_line` covering ASCII byte columns, UTF-8
+  byte (not char) columns, and the no-trailing-newline guarantee.
+
 ## 0.3.3
 
 ### Fixed
