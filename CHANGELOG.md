@@ -6,6 +6,27 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
+## 0.3.3
+
+### Fixed
+
+- Diagnostic spans for `W_LINE_NOT_RECOGNIZED`,
+  `W_LINE_NOT_RECOGNIZED_IN_FILES`, and `W_LINE_NOT_RECOGNIZED_IN_PACKAGE`
+  no longer extend past the end of the offending line. Previously the
+  span included the trailing newline, which `codespan` rendered as a
+  multi-line carat reaching into the unrelated next physical line.
+- Section header subpackage arguments (`%description -n …`,
+  `%package -n …`, `%files -n …`, `%verify -n …`, `%sepolicy -n …`,
+  scriptlet headers) now accept macro references such as
+  `%description -n %{shortname}-sub1`. The previous ident-only token
+  parser silently dropped the macro segment.
+- Suppress spurious `W_UNEXPECTED_LINE_IN_CHANGELOG` (`rpmspec/W0023`)
+  on indented body lines inside `%changelog` entries. Real-world
+  changelog bodies often contain bullet continuations like
+  ` * release notes` or `  - url`, which the previous logic misread
+  as malformed entry headers because it stripped leading whitespace
+  before probing for `*`.
+
 ## 0.3.2
 
 ### Fixed

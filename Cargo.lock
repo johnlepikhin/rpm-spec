@@ -76,7 +76,7 @@ dependencies = [
 
 [[package]]
 name = "rpm-spec"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "nom",
  "nom_locate",
