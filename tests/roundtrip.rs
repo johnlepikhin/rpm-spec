@@ -177,6 +177,45 @@ fn macro_definitions_roundtrip() {
 }
 
 #[test]
+fn bcond_references_roundtrip() {
+    // `%{with NAME}` / `%{without NAME}` inside `%if` conditions —
+    // exercises the parser promotion to `Builtin(With/Without)` +
+    // the printer's space-separator format. AST equality after
+    // round-trip is the canonical regression guard for the pair
+    // of changes (Phase 12).
+    let src = "\
+Name:    foo
+Version: 1.0
+Release: 1
+Summary: t
+License: MIT
+%bcond_with bootstrap
+%bcond_without docs
+
+%if %{with bootstrap}
+BuildRequires: bootstrap-pkg
+%endif
+
+%if %{without docs}
+BuildRequires: doctool
+%endif
+
+%description
+B
+
+%files
+
+%changelog
+* Mon Jan 01 2024 a <a@b> - 1.0-1
+- init
+";
+    let ast1 = parse_to_unit(src);
+    let printed = print(&ast1);
+    let ast2 = parse_to_unit(&printed);
+    assert_eq!(ast1, ast2, "round-trip changed AST: printed = {printed:?}");
+}
+
+#[test]
 fn parsed_expressions_roundtrip() {
     // Mix of `%if` expressions the AST should recognise structurally
     // (Integer, comparison, logical AND/OR, parens, string equality,

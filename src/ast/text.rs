@@ -266,8 +266,163 @@ pub enum BuiltinMacro {
     Dnl,
     Trace,
     Dump,
+    /// `%{with NAME}` — RPM build-time conditional query. Returns
+    /// `"1"` at build time iff the bcond `NAME` is enabled (declared
+    /// by `%bcond_with NAME` + `--with NAME`, or by
+    /// `%bcond_without NAME` without `--without NAME`).
+    ///
+    /// The feature name lives in [`MacroRef::args`]`[0]` as a
+    /// single-segment [`Text`] — same shape every other parametric
+    /// builtin uses (`%{shrink:body}` stores `body` in `args[0]`).
+    /// Unit variant (no payload) so there is exactly one source of
+    /// truth for the feature name.
+    With,
+    /// `%{without NAME}` — inverse of [`Self::With`]. Returns `"1"`
+    /// iff the bcond is disabled. Feature name in `args[0]`.
+    Without,
     /// Verbatim name for unknown builtins.
     Other(Box<str>),
+}
+
+/// Surface kind of a `%{with NAME}` / `%{without NAME}` query.
+/// Used by the [`parse_bcond_verbatim`] helper so consumers don't
+/// reimplement the substring matching every time they need to
+/// detect a bcond query from raw source text (e.g. inside a
+/// [`crate::ast::expr::ExprAst::Macro`] verbatim body where the
+/// parser does NOT structurally model the inner macro reference).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum BcondForm {
+    /// `%{with FEATURE}`.
+    With,
+    /// `%{without FEATURE}`.
+    Without,
+}
+
+/// Parse a verbatim macro-reference token like `"%{with bootstrap}"`
+/// or `"%{without docs}"` and recover the bcond form plus the
+/// feature name. Returns `None` if the token isn't a bcond shape.
+///
+/// Centralised here (rather than in every analyzer / LSP / formatter
+/// that wants to recognise bcond queries) so the parsing rule has a
+/// single source of truth. Concretely:
+///
+/// * Wrapper `%{ ... }` is required; leading `%name` plain forms or
+///   `%(...)` shells are rejected.
+/// * Exactly one whitespace-separated argument is required after
+///   the keyword. `%{with}` (no arg), `%{with foo bar}` (two args)
+///   and `%{withholding}` (no space) all return `None`.
+/// * Whitespace inside the braces is tolerated (`%{ with foo }`).
+/// * Conditional prefixes `%{?with foo}` and `%{!?with foo}` are
+///   stripped before matching the keyword — they are valid RPM
+///   surface forms for the same bcond query.
+///
+/// The returned `&str` borrows from the input; the caller copies if
+/// it needs an owned name.
+#[must_use]
+pub fn parse_bcond_verbatim(verbatim: &str) -> Option<(BcondForm, &str)> {
+    let inner = verbatim.strip_prefix("%{")?.strip_suffix('}')?;
+    // Tolerate `?` / `!?` conditional prefixes — RPM treats
+    // `%{?with foo}` as the same bcond query as `%{with foo}` (the
+    // `?` triggers "expand only if defined", but `with` is always
+    // a builtin so it always expands). Aligning here so analyzer
+    // and lint share one detection rule.
+    let inner = inner.trim();
+    let inner = inner
+        .strip_prefix("!?")
+        .or_else(|| inner.strip_prefix('?'))
+        .unwrap_or(inner)
+        .trim_start();
+    let mut parts = inner.splitn(2, char::is_whitespace);
+    let keyword = parts.next()?;
+    let name = parts.next()?.trim();
+    if name.is_empty() || name.contains(char::is_whitespace) {
+        return None;
+    }
+    let form = match keyword {
+        "with" => BcondForm::With,
+        "without" => BcondForm::Without,
+        _ => return None,
+    };
+    Some((form, name))
+}
+
+#[cfg(test)]
+mod bcond_parse_tests {
+    use super::*;
+
+    #[test]
+    fn parses_with_form() {
+        assert_eq!(
+            parse_bcond_verbatim("%{with bootstrap}"),
+            Some((BcondForm::With, "bootstrap"))
+        );
+    }
+
+    #[test]
+    fn parses_without_form() {
+        assert_eq!(
+            parse_bcond_verbatim("%{without docs}"),
+            Some((BcondForm::Without, "docs"))
+        );
+    }
+
+    #[test]
+    fn tolerates_inner_whitespace() {
+        assert_eq!(
+            parse_bcond_verbatim("%{ with foo }"),
+            Some((BcondForm::With, "foo"))
+        );
+    }
+
+    #[test]
+    fn rejects_missing_arg() {
+        assert_eq!(parse_bcond_verbatim("%{with}"), None);
+    }
+
+    #[test]
+    fn rejects_two_args() {
+        // RPM treats `%{with foo bar}` as a 2-arg parametric call,
+        // not a bcond query.
+        assert_eq!(parse_bcond_verbatim("%{with foo bar}"), None);
+    }
+
+    #[test]
+    fn rejects_prefix_only_match() {
+        // `withholding` mustn't be matched as a "with" keyword.
+        assert_eq!(parse_bcond_verbatim("%{withholding}"), None);
+    }
+
+    #[test]
+    fn rejects_plain_form() {
+        // No braces — not a bcond verbatim shape.
+        assert_eq!(parse_bcond_verbatim("%with foo"), None);
+    }
+
+    #[test]
+    fn rejects_unrelated_keyword() {
+        assert_eq!(parse_bcond_verbatim("%{shrink foo}"), None);
+    }
+
+    #[test]
+    fn accepts_conditional_question_prefix() {
+        // `%{?with foo}` is valid RPM — `?` means "expand if
+        // defined", and `with` is always a builtin so it always
+        // expands. Treat as the same query.
+        assert_eq!(
+            parse_bcond_verbatim("%{?with foo}"),
+            Some((BcondForm::With, "foo"))
+        );
+    }
+
+    #[test]
+    fn accepts_conditional_bang_question_prefix() {
+        assert_eq!(
+            parse_bcond_verbatim("%{!?without docs}"),
+            Some((BcondForm::Without, "docs"))
+        );
+    }
 }
 
 #[cfg(test)]

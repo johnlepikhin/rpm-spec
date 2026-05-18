@@ -51,8 +51,8 @@ pub use scriptlet::{
 pub use section::{BuildScriptKind, PackageName, Section, ShellBody, SubpkgRef, TextBody};
 pub use span::Span;
 pub use text::{
-    BuiltinMacro, ConditionalMacro, MacroKind, MacroRef, SIGIL_ALL_ARGS, SIGIL_ALL_POSITIONAL,
-    SIGIL_ARG_COUNT, Text, TextSegment,
+    BcondForm, BuiltinMacro, ConditionalMacro, MacroKind, MacroRef, SIGIL_ALL_ARGS,
+    SIGIL_ALL_POSITIONAL, SIGIL_ARG_COUNT, Text, TextSegment, parse_bcond_verbatim,
 };
 
 /// The root of a parsed `.spec` file.

@@ -527,6 +527,41 @@ fn parse_braced_macro<'a>(state: &ParserState, input: Input<'a>) -> IResult<Inpu
         kind = MacroKind::Builtin(known_builtin.unwrap());
     }
 
+    // `%{with NAME}` / `%{without NAME}` post-process: when the
+    // parametric path collected exactly one literal arg under the
+    // "with"/"without" keyword, promote to the structural Builtin
+    // tag — keeps the feature name in `args[0]` (single source of
+    // truth, same shape as every other parametric builtin) and lets
+    // downstream consumers dispatch on `MacroKind::Builtin(With)`
+    // / `Builtin(Without)` instead of substring-matching the
+    // verbatim text.
+    //
+    // Conditional prefixes (`%{?with foo}` / `%{!?without docs}`)
+    // are honoured by carrying the `conditional` field forward —
+    // the prefix is orthogonal to the bcond semantics (rpm always
+    // expands `with`, so `?` adds no behaviour) but operators do
+    // write the prefixed form and consumers should see the same
+    // structural variant either way.
+    if matches!(kind, MacroKind::Parametric)
+        && args.len() == 1
+        && with_value.is_none()
+    {
+        if let Some(feature) = args[0].literal_str() {
+            let feature_trimmed = feature.trim();
+            if !feature_trimmed.is_empty() && !feature_trimmed.contains(char::is_whitespace) {
+                match name {
+                    "with" => {
+                        kind = MacroKind::Builtin(BuiltinMacro::With);
+                    }
+                    "without" => {
+                        kind = MacroKind::Builtin(BuiltinMacro::Without);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     // Expect closing '}'.
     let frag2 = *cursor.fragment();
     if frag2.starts_with('}') {
@@ -670,6 +705,51 @@ mod tests {
         assert_eq!(m.args[0].literal_str(), Some("a"));
         assert_eq!(m.args[1].literal_str(), Some("b"));
     }
+
+    #[test]
+    fn with_bcond_promoted_to_builtin() {
+        // `%{with foo}` with a literal single arg must be promoted
+        // from the generic Parametric form to the structural
+        // `BuiltinMacro::With` tag — keeps downstream analyzers
+        // free of substring matching.
+        let (t, _s) = parse_one("%{with bootstrap}");
+        let m = first_macro(&t);
+        assert_eq!(m.kind, MacroKind::Builtin(BuiltinMacro::With));
+        // Feature name lives in args[0] (single source of truth).
+        assert_eq!(m.args.len(), 1);
+        assert_eq!(m.args[0].literal_str(), Some("bootstrap"));
+    }
+
+    #[test]
+    fn without_bcond_promoted_to_builtin() {
+        let (t, _s) = parse_one("%{without docs}");
+        let m = first_macro(&t);
+        assert_eq!(m.kind, MacroKind::Builtin(BuiltinMacro::Without));
+        assert_eq!(m.args[0].literal_str(), Some("docs"));
+    }
+
+    #[test]
+    fn with_macro_arg_stays_parametric() {
+        // Non-literal feature name (e.g. `%{with %{name}}`) — the
+        // parser can't promote to Builtin because the structural
+        // form expects a single literal token. Stays Parametric so
+        // downstream lints can still recognise it via the fallback
+        // detection path.
+        let (t, _s) = parse_one("%{with %{name}}");
+        let m = first_macro(&t);
+        assert_eq!(m.kind, MacroKind::Parametric);
+        assert_eq!(m.name, "with");
+    }
+
+    // Round-trip parse↔print is covered indirectly by:
+    // 1. The parser tests above (`with_bcond_promoted_to_builtin`)
+    //    asserting the AST shape.
+    // 2. The printer's `builtin_with_emits_space_separator` /
+    //    `builtin_without_emits_space_separator` tests in
+    //    `printer/text.rs` asserting the rendered form.
+    // The integration roundtrip lives in `tests/roundtrip.rs` and
+    // will exercise the combined path on any spec touching bcond
+    // refs.
 
     #[test]
     fn shell_macro() {

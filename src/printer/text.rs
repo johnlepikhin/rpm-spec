@@ -144,10 +144,30 @@ pub(crate) fn print_macro_ref_no_percent(p: &mut Printer<'_>, m: &MacroRef) {
         }
         MacroKind::Builtin(b) => {
             p.raw_char('{');
+            // `With` / `Without` carry an optional conditional
+            // prefix from the parser (`%{?with foo}` /
+            // `%{!?without docs}`). Other builtins never appear with
+            // a conditional in the wild but the printer handles it
+            // uniformly for safety.
+            print_conditional_prefix(p, m.conditional);
             p.raw(builtin_name(b, &m.name));
-            p.raw_char(':');
-            if let Some(body) = m.args.first() {
-                print_text(p, body);
+            // `With` / `Without` are space-separated parametric
+            // builtins (`%{with NAME}`). The feature lives in
+            // `args[0]` like every other parametric builtin's body.
+            // Other builtins (`Shrink`, `Quote`, …) use `:body`.
+            match b {
+                BuiltinMacro::With | BuiltinMacro::Without => {
+                    if let Some(body) = m.args.first() {
+                        p.raw_char(' ');
+                        print_text(p, body);
+                    }
+                }
+                _ => {
+                    p.raw_char(':');
+                    if let Some(body) = m.args.first() {
+                        print_text(p, body);
+                    }
+                }
             }
             p.raw_char('}');
         }
@@ -185,6 +205,12 @@ fn builtin_name<'a>(b: &'a BuiltinMacro, fallback_name: &'a str) -> &'a str {
         BuiltinMacro::Dnl => "dnl",
         BuiltinMacro::Trace => "trace",
         BuiltinMacro::Dump => "dump",
+        // `With` / `Without` print as `%{with NAME}` /
+        // `%{without NAME}`. The keyword goes here, the feature
+        // name comes from `args[0]` (parametric-style storage,
+        // single source of truth across the AST).
+        BuiltinMacro::With => "with",
+        BuiltinMacro::Without => "without",
         BuiltinMacro::Other(name) => {
             // Use the `Other`'s stored name; fall back to `MacroRef.name`
             // if for some reason it is empty.
@@ -306,6 +332,32 @@ mod tests {
             with_value: None,
         };
         assert_eq!(render_macro(&m), "%{lua:print('hi')}");
+    }
+
+    #[test]
+    fn builtin_with_emits_space_separator() {
+        // `%{with NAME}` uses a SPACE between keyword and feature
+        // name, NOT the `:` used by Shrink/Quote/etc.
+        let m = MacroRef {
+            kind: MacroKind::Builtin(BuiltinMacro::With),
+            name: "with".into(),
+            args: vec![Text::from("bootstrap")],
+            conditional: ConditionalMacro::None,
+            with_value: None,
+        };
+        assert_eq!(render_macro(&m), "%{with bootstrap}");
+    }
+
+    #[test]
+    fn builtin_without_emits_space_separator() {
+        let m = MacroRef {
+            kind: MacroKind::Builtin(BuiltinMacro::Without),
+            name: "without".into(),
+            args: vec![Text::from("docs")],
+            conditional: ConditionalMacro::None,
+            with_value: None,
+        };
+        assert_eq!(render_macro(&m), "%{without docs}");
     }
 
     #[test]
