@@ -6,7 +6,7 @@
 //! byte-identical output should keep the input source around and slice
 //! it themselves.
 
-use crate::ast::ExprAst;
+use crate::ast::{ConcatPart, ExprAst};
 
 use super::{Printer, TokenKind};
 
@@ -43,5 +43,76 @@ pub(crate) fn print_expr_ast<T>(p: &mut Printer<'_>, ast: &ExprAst<T>) {
             p.raw_char(' ');
             print_expr_ast(p, rhs);
         }
+        ExprAst::NumericConcat { parts, .. } => {
+            // Parts juxtapose without intervening whitespace — that's
+            // the whole point of the variant (`0%{?el8}`).
+            for part in parts {
+                match part {
+                    ConcatPart::Literal { text, .. } => p.emit(TokenKind::Number, text),
+                    ConcatPart::Macro { text, .. } => p.emit(TokenKind::MacroRef, text),
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{ConcatPart, ExprAst};
+    use crate::printer::PrinterConfig;
+
+    fn render(ast: &ExprAst<()>) -> String {
+        let cfg = PrinterConfig::default();
+        let mut buf = String::new();
+        {
+            let mut p = Printer::new(&mut buf, &cfg);
+            print_expr_ast(&mut p, ast);
+        }
+        buf
+    }
+
+    #[test]
+    fn numeric_concat_two_parts_no_whitespace() {
+        // Canonical RPM "safe defined" idiom: literal `0` glued to a
+        // conditional macro reference, no spaces between atoms.
+        let ast = ExprAst::NumericConcat {
+            parts: vec![
+                ConcatPart::Literal {
+                    text: "0".to_string(),
+                    data: (),
+                },
+                ConcatPart::Macro {
+                    text: "%{?el8}".to_string(),
+                    data: (),
+                },
+            ],
+            data: (),
+        };
+        assert_eq!(render(&ast), "0%{?el8}");
+    }
+
+    #[test]
+    fn numeric_concat_three_parts_no_whitespace() {
+        // Three-atom juxtaposition: macro / literal / macro stays glued
+        // together without printer-inserted whitespace.
+        let ast = ExprAst::NumericConcat {
+            parts: vec![
+                ConcatPart::Macro {
+                    text: "%{a}".to_string(),
+                    data: (),
+                },
+                ConcatPart::Literal {
+                    text: "1".to_string(),
+                    data: (),
+                },
+                ConcatPart::Macro {
+                    text: "%{b}".to_string(),
+                    data: (),
+                },
+            ],
+            data: (),
+        };
+        assert_eq!(render(&ast), "%{a}1%{b}");
     }
 }

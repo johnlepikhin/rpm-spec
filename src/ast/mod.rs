@@ -35,7 +35,12 @@ pub mod text;
 pub use changelog::{ChangelogDate, ChangelogEntry, Month, Weekday};
 pub use cond::{CondBranch, CondExpr, CondKind, Conditional};
 pub use deps::{BoolDep, DepAtom, DepConstraint, DepExpr, EVR, VerOp};
-pub use expr::{BinOp, ExprAst};
+// `ConcatPart` is re-exported for AST consumers (analysers, formatters)
+// but is `#[non_exhaustive]` on both the enum and each variant —
+// downstream code should pattern-match with a `_` arm and construct
+// via the validating `ConcatPart::literal()`/`ConcatPart::macro_ref()`
+// helpers, not struct-literal syntax.
+pub use expr::{BinOp, ConcatPart, ExprAst};
 pub use files::{
     AttrField, AttrFields, ConfigFlag, DefattrFields, FileDirective, FileEntry, FilePath,
     FilesContent, VerifyCheck,

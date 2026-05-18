@@ -350,6 +350,18 @@ fn strip_expr_ast(ast: crate::ast::ExprAst<Span>) -> crate::ast::ExprAst<()> {
             rhs: Box::new(strip_expr_ast(*rhs)),
             data: (),
         },
+        ExprAst::NumericConcat { parts, .. } => ExprAst::NumericConcat {
+            parts: parts.into_iter().map(strip_concat_part).collect(),
+            data: (),
+        },
+    }
+}
+
+fn strip_concat_part(p: crate::ast::ConcatPart<Span>) -> crate::ast::ConcatPart<()> {
+    use crate::ast::ConcatPart;
+    match p {
+        ConcatPart::Literal { text, .. } => ConcatPart::Literal { text, data: () },
+        ConcatPart::Macro { text, .. } => ConcatPart::Macro { text, data: () },
     }
 }
 

@@ -25,8 +25,18 @@
 //! equality := relational (('==' | '!=') relational)*
 //! relational := unary  (('<=' | '>=' | '<' | '>') unary)*
 //! unary    := '!' unary | primary
-//! primary  := integer | string | macro | identifier | '(' expr ')'
+//! primary  := concat | string | identifier | '(' expr ')'
+//! concat   := atom (atom)*       // atoms juxtaposed without whitespace
+//! atom     := integer | macro    // only digit-strings and `%`-macros
+//!                                // participate in concatenation
 //! ```
+//!
+//! "Atoms juxtaposed without whitespace" is the standard RPM idiom
+//! `0%{?el8}` — a literal `0` glued to a macro reference. After macro
+//! expansion the parts concatenate into one string and RPM parses the
+//! result as an integer (undefined `%{?name}` → empty, so the whole
+//! thing is `0`). The AST captures this as
+//! [`ExprAst::NumericConcat`].
 //!
 //! Arithmetic operators (`+`, `-`, `*`, `/`) are intentionally outside
 //! the modelled subset; expressions containing them fall through to
@@ -163,6 +173,121 @@ pub enum ExprAst<T = ()> {
         /// Per-node user-data (typically a span).
         data: T,
     },
+    /// Two or more atoms (`integer` / `macro` / `string` / `identifier`)
+    /// juxtaposed in source **without whitespace**. The canonical use is
+    /// the RPM "safe defined" idiom:
+    ///
+    /// * `0%{?el8}` — `0` followed by `%{?el8}`. If `el8` is undefined
+    ///   the macro expands to empty, leaving the literal `"0"` → `0`
+    ///   (falsy); if `el8` is defined to `1`, the concat is `"01"` → `1`
+    ///   (truthy).
+    ///
+    /// After macro expansion the parts are concatenated in source
+    /// order and parsed as `i64`. An expansion failure or a non-numeric
+    /// result is reported by the evaluator as an `EvalError`.
+    NumericConcat {
+        /// Atoms in source order. Always `len() >= 2`; the parser
+        /// returns a single atom directly without wrapping it.
+        parts: Vec<ConcatPart<T>>,
+        /// Per-node user-data (typically a span).
+        data: T,
+    },
+}
+
+/// One part of a [`ExprAst::NumericConcat`] juxtaposition. Mirrors the
+/// shape of [`ExprAst`]'s atom variants so analyses can recurse without
+/// special casing the concat path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[non_exhaustive]
+pub enum ConcatPart<T = ()> {
+    /// Decimal digits between macros (e.g. the `0` in `0%{?el8}`).
+    /// The parser only emits digit-only literals; the first non-digit
+    /// character terminates the concat.
+    ///
+    /// Each variant is also `#[non_exhaustive]` to block external
+    /// struct-literal construction — downstream crates must build
+    /// instances through [`ConcatPart::literal`] (which validates
+    /// non-empty digits) instead of bypassing the invariant.
+    #[non_exhaustive]
+    Literal {
+        /// Verbatim literal content as written in source.
+        text: String,
+        /// Per-part user-data (typically a span).
+        data: T,
+    },
+    /// `%{name}` / `%{?name}` macro reference, stored verbatim
+    /// (including the leading `%` and any braces). Mirrors
+    /// [`ExprAst::Macro`].
+    ///
+    /// Each variant is also `#[non_exhaustive]` to block external
+    /// struct-literal construction — downstream crates must build
+    /// instances through [`ConcatPart::macro_ref`] (which validates
+    /// a leading `%`) instead of bypassing the invariant.
+    #[non_exhaustive]
+    Macro {
+        /// Verbatim macro reference, as written in source.
+        text: String,
+        /// Per-part user-data (typically a span).
+        data: T,
+    },
+}
+
+impl<T: Default> ConcatPart<T> {
+    /// Build a [`ConcatPart::Literal`] after validating that `text` is a
+    /// non-empty ASCII-digit string — the only shape the parser emits
+    /// and the only one downstream code should construct.
+    ///
+    /// The per-part user-data field is filled via `T::default()`. For
+    /// `T = ()` this is the no-op unit value; for `T = Span` it is the
+    /// zero-valued span (covering offset `0..0` on line/column 0).
+    ///
+    /// Returns `None` when `text` is empty or contains any non-digit
+    /// character (including leading `+`/`-`, whitespace, or macro
+    /// markers).
+    #[must_use]
+    pub fn literal(text: impl Into<String>) -> Option<Self> {
+        let text = text.into();
+        if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        Some(ConcatPart::Literal {
+            text,
+            data: T::default(),
+        })
+    }
+
+    /// Build a [`ConcatPart::Macro`] after validating that `text` starts
+    /// with `%` — the only shape the parser emits for this variant.
+    ///
+    /// The per-part user-data field is filled via `T::default()`.
+    ///
+    /// Returns `None` when `text` is empty or does not begin with `%`.
+    /// Further structural validity (matched braces, valid macro-name
+    /// chars) is not checked here; callers that need stricter
+    /// validation should use the parser entry points instead.
+    #[must_use]
+    pub fn macro_ref(text: impl Into<String>) -> Option<Self> {
+        let text = text.into();
+        if !text.starts_with('%') {
+            return None;
+        }
+        Some(ConcatPart::Macro {
+            text,
+            data: T::default(),
+        })
+    }
+}
+
+impl<T> ConcatPart<T> {
+    /// Per-part user-data (typically a [`super::span::Span`]).
+    #[must_use]
+    pub fn data(&self) -> &T {
+        match self {
+            ConcatPart::Literal { data, .. } | ConcatPart::Macro { data, .. } => data,
+        }
+    }
 }
 
 impl<T> ExprAst<T> {
@@ -176,7 +301,8 @@ impl<T> ExprAst<T> {
             | ExprAst::Identifier { data, .. }
             | ExprAst::Paren { data, .. }
             | ExprAst::Not { data, .. }
-            | ExprAst::Binary { data, .. } => data,
+            | ExprAst::Binary { data, .. }
+            | ExprAst::NumericConcat { data, .. } => data,
         }
     }
 

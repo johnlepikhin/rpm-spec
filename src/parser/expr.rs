@@ -33,7 +33,7 @@ use nom::{
     sequence::pair,
 };
 
-use crate::ast::{BinOp, ExprAst, Span};
+use crate::ast::{BinOp, ConcatPart, ExprAst, Span};
 
 use super::input::{Input, span_between};
 use super::util::{is_macro_name_char, is_macro_name_start, space0};
@@ -43,6 +43,11 @@ use super::util::{is_macro_name_char, is_macro_name_start, space0};
 /// `%if` expressions in real specs nest only a handful of levels —
 /// 128 is comfortably above what the upstream evaluator handles.
 const MAX_DEPTH: u32 = 128;
+
+/// Maximum number of atoms in a single `NumericConcat` juxtaposition.
+/// Real-world specs have ≤3 atoms (`0%{?dist}.0`); 64 gives ample headroom
+/// while bounding worst-case memory for adversarial input.
+const MAX_CONCAT_PARTS: usize = 64;
 
 /// Top-level entry: parse a single RPM expression. The combinator
 /// stops at the first whitespace/character it can't consume — the
@@ -175,65 +180,105 @@ fn parse_primary(input: Input<'_>, depth: u32) -> IResult<Input<'_>, ExprAst<Spa
             ))
         }
         '"' => parse_string_literal(start, rest),
-        '0'..='9' => parse_integer(start, rest),
-        '%' => parse_macro_primary(start, rest),
+        '0'..='9' | '%' => parse_concat_or_single(start, rest),
         c if is_macro_name_start(c) => parse_identifier(start, rest),
         _ => Err(nom::Err::Error(error_position!(rest, ErrorKind::Char))),
     }
 }
 
-// =====================================================================
-// Operand parsers
-// =====================================================================
-
-fn parse_integer<'a>(start: Input<'a>, rest: Input<'a>) -> IResult<Input<'a>, ExprAst<Span>> {
-    let (after_digits, digits) = digit1(rest)?;
-    // i64 overflow falls back to a parse error; the caller (cond.rs)
-    // then drops to `CondExpr::Raw`, preserving the source verbatim.
-    // TODO(diag): emit W_IF_INT_OVERFLOW for overflow specifically.
-    // Distinguishing overflow from malformed digits requires threading
-    // `ParserState` through this layer; tracked as a follow-up.
-    let value: i64 = digits
-        .fragment()
-        .parse()
-        .map_err(|_| nom::Err::Error(error_position!(rest, ErrorKind::Digit)))?;
-    let span = span_between(&start, &after_digits);
-    Ok((after_digits, ExprAst::Integer { value, data: span }))
-}
-
-fn parse_string_literal<'a>(
+/// Parse a primary "term" that may be a juxtaposition of a digit
+/// literal and one or more macro references, without intervening
+/// whitespace. Examples: `0`, `%{?el8}`, `0%{?el8}`, `%{ver}0`,
+/// `1%{?dist}0`.
+///
+/// `start` is the cursor at the head of the primary (before any
+/// `space0` skip); `rest` is the cursor positioned at the first
+/// non-whitespace character.
+///
+/// Returns a single [`ExprAst::Integer`]/[`ExprAst::Macro`] when only
+/// one atom is consumed, or [`ExprAst::NumericConcat`] when two or more
+/// adjacent atoms are joined.
+fn parse_concat_or_single<'a>(
     start: Input<'a>,
     rest: Input<'a>,
 ) -> IResult<Input<'a>, ExprAst<Span>> {
-    let (after_open, _) = nom_char('"').parse(rest)?;
-    // RPM string literals are line-bounded. Reject embedded `\n`/`\r`
-    // so a stray unclosed quote can't drag subsequent spec lines into
-    // a single literal.
-    let (after_body, body) =
-        nom::bytes::complete::take_while(|c: char| c != '"' && c != '\n' && c != '\r')(after_open)?;
-    let (after_close, _) = nom_char('"').parse(after_body)?;
-    let span = span_between(&start, &after_close);
+    let term_start = rest;
+    // Typical NumericConcat has 2-3 parts (`0%{?dist}` / `0%{?dist}.0`);
+    // pre-allocate the common capacity.
+    let mut parts: Vec<ConcatPart<Span>> = Vec::with_capacity(2);
+    let mut cursor = rest;
+    loop {
+        if parts.len() >= MAX_CONCAT_PARTS {
+            break;
+        }
+        let before_atom = cursor;
+        // ASCII fast path: we only branch on the digit range and `%`,
+        // both single-byte ASCII, so inspecting the leading byte is
+        // sufficient and avoids the UTF-8 decode cost of `chars()` on
+        // every loop iteration.
+        let next_ch = match cursor.fragment().as_bytes().first().copied() {
+            Some(b) => b,
+            None => break,
+        };
+        let (after_atom, part) = match next_ch {
+            b'0'..=b'9' => parse_concat_literal(cursor)?,
+            b'%' => parse_concat_macro(cursor)?,
+            _ => break,
+        };
+        debug_assert!(
+            after_atom.location_offset() > before_atom.location_offset(),
+            "atom parser must make progress (digit1/% guarantees ≥1 byte)"
+        );
+        parts.push(part);
+        cursor = after_atom;
+    }
+    debug_assert!(
+        !parts.is_empty(),
+        "parse_primary dispatches here only for '0'..='9' | '%'; both consume ≥1 byte"
+    );
+    if parts.len() == 1 {
+        // Single atom — unwrap into the canonical Integer/Macro variant
+        // so existing consumers don't need to learn about NumericConcat
+        // for the common `42` / `%{?rhel}` case.
+        let span = span_between(&start, &cursor);
+        let only = match parts.pop() {
+            Some(p) => p,
+            None => unreachable!("parts.len() == 1 checked above"),
+        };
+        return match unwrap_single_part(only, span) {
+            Some(ast) => Ok((cursor, ast)),
+            // i64 overflow on a bare literal — preserve the previous
+            // `parse_integer` behaviour: fail so cond.rs falls back to
+            // `CondExpr::Raw`.
+            None => Err(nom::Err::Error(error_position!(rest, ErrorKind::Digit))),
+        };
+    }
+    let span = span_between(&term_start, &cursor);
+    Ok((cursor, ExprAst::NumericConcat { parts, data: span }))
+}
+
+/// Parse one literal-digit part of a juxtaposition. Consumes `digit1`.
+/// Returns a [`ConcatPart::Literal`] whose `text` is the digit string
+/// verbatim (no `i64` parsing — the value is decided after the whole
+/// concat is materialised and macros expanded).
+fn parse_concat_literal<'a>(rest: Input<'a>) -> IResult<Input<'a>, ConcatPart<Span>> {
+    let start = rest;
+    let (after_digits, digits) = digit1(rest)?;
+    let span = span_between(&start, &after_digits);
     Ok((
-        after_close,
-        ExprAst::String {
-            value: body.fragment().to_string(),
+        after_digits,
+        ConcatPart::Literal {
+            text: digits.fragment().to_string(),
             data: span,
         },
     ))
 }
 
-fn parse_macro_primary<'a>(start: Input<'a>, rest: Input<'a>) -> IResult<Input<'a>, ExprAst<Span>> {
-    // A `%` token in an expression is a macro reference. Forms:
-    //   - `%{...}` / `%{?...}`: braced, with brace-depth tracking so
-    //     nested `%{?a:%{?b}}` is captured as one extent.
-    //   - `%name`:               bare.
-    // The whole verbatim slice (including the leading `%` and braces)
-    // is stored on `ExprAst::Macro` so the printer can emit it as-is.
-    // Only `%{…}` braced and bare `%name` are recognised; `%(shell)`
-    // and `%[expr]` macros are unsupported in `%if` expressions and
-    // the surrounding parse falls back to `Raw`.
-    // Stored as a flat String — callers that need structured walking
-    // should invoke `parse_macro_ref` directly on the source slice.
+/// Parse one macro reference part of a juxtaposition. Uses
+/// [`find_brace_close`] for `%{…}` brace-balanced bodies and the
+/// `is_macro_name_*` predicates for bare-name macros.
+fn parse_concat_macro<'a>(rest: Input<'a>) -> IResult<Input<'a>, ConcatPart<Span>> {
+    let start = rest;
     let frag = *rest.fragment();
     let bytes = frag.as_bytes();
     debug_assert!(bytes.first() == Some(&b'%'));
@@ -254,8 +299,64 @@ fn parse_macro_primary<'a>(start: Input<'a>, rest: Input<'a>) -> IResult<Input<'
     let span = span_between(&start, &after_macro);
     Ok((
         after_macro,
-        ExprAst::Macro {
+        ConcatPart::Macro {
             text: macro_text,
+            data: span,
+        },
+    ))
+}
+
+/// Single-atom shortcut: build the canonical [`ExprAst::Integer`] /
+/// [`ExprAst::Macro`] node instead of wrapping in a length-1
+/// [`ExprAst::NumericConcat`]. Returns `None` when the part is a
+/// literal that overflows `i64` so the caller fails the parse and
+/// `cond.rs` falls back to [`crate::ast::CondExpr::Raw`] (matches the
+/// original `parse_integer` behaviour).
+///
+/// **Lossy:** `i64::from_str` failure does not distinguish overflow
+/// from malformed digit-strings here; both collapse into `None`.
+/// Threading `ParserState` to emit `W_IF_INT_OVERFLOW` specifically
+/// is tracked by the TODO in this function's body.
+fn unwrap_single_part(part: ConcatPart<Span>, outer_span: Span) -> Option<ExprAst<Span>> {
+    match part {
+        ConcatPart::Literal { text, .. } => {
+            // TODO(diag): emit W_IF_INT_OVERFLOW for overflow specifically.
+            // Requires threading `ParserState` into this helper; until then
+            // the `Option` return path collapses overflow and InvalidDigit
+            // indistinguishably.
+            let value: i64 = text.parse().ok()?;
+            Some(ExprAst::Integer {
+                value,
+                data: outer_span,
+            })
+        }
+        ConcatPart::Macro { text, .. } => Some(ExprAst::Macro {
+            text,
+            data: outer_span,
+        }),
+    }
+}
+
+// =====================================================================
+// Operand parsers
+// =====================================================================
+
+fn parse_string_literal<'a>(
+    start: Input<'a>,
+    rest: Input<'a>,
+) -> IResult<Input<'a>, ExprAst<Span>> {
+    let (after_open, _) = nom_char('"').parse(rest)?;
+    // RPM string literals are line-bounded. Reject embedded `\n`/`\r`
+    // so a stray unclosed quote can't drag subsequent spec lines into
+    // a single literal.
+    let (after_body, body) =
+        nom::bytes::complete::take_while(|c: char| c != '"' && c != '\n' && c != '\r')(after_open)?;
+    let (after_close, _) = nom_char('"').parse(after_body)?;
+    let span = span_between(&start, &after_close);
+    Ok((
+        after_close,
+        ExprAst::String {
+            value: body.fragment().to_string(),
             data: span,
         },
     ))
@@ -635,5 +736,147 @@ mod tests {
         let span = ast.data();
         assert_eq!(span.start_byte, 0);
         assert_eq!(span.end_byte, 6);
+    }
+
+    // -----------------------------------------------------------------
+    // NumericConcat — `0%{?el8}` idiom and friends
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn parses_zero_prefix_macro_as_numeric_concat() {
+        let ast = parse_full("0%{?el8}").unwrap();
+        match ast {
+            ExprAst::NumericConcat { parts, .. } => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(
+                    &parts[0],
+                    ConcatPart::Literal { text, .. } if text == "0"
+                ));
+                assert!(matches!(
+                    &parts[1],
+                    ConcatPart::Macro { text, .. } if text == "%{?el8}"
+                ));
+            }
+            other => panic!("expected NumericConcat, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_macro_suffix_literal_as_numeric_concat() {
+        let ast = parse_full("%{ver}0").unwrap();
+        match ast {
+            ExprAst::NumericConcat { parts, .. } => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(
+                    &parts[0],
+                    ConcatPart::Macro { text, .. } if text == "%{ver}"
+                ));
+                assert!(matches!(
+                    &parts[1],
+                    ConcatPart::Literal { text, .. } if text == "0"
+                ));
+            }
+            other => panic!("expected NumericConcat, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_chained_or_with_numeric_concats() {
+        // `0%{?el8} || 0%{?el9} || 0%{?el10}` — three NumericConcats
+        // chained by `||`, left-associative tree.
+        let ast = parse_full("0%{?el8} || 0%{?el9} || 0%{?el10}").unwrap();
+        match ast {
+            ExprAst::Binary {
+                kind: BinOp::LogOr,
+                lhs,
+                rhs,
+                ..
+            } => {
+                // rhs is the rightmost NumericConcat.
+                assert!(matches!(*rhs, ExprAst::NumericConcat { .. }));
+                // lhs is the left-leaning sub-tree.
+                match *lhs {
+                    ExprAst::Binary {
+                        kind: BinOp::LogOr,
+                        lhs: inner_lhs,
+                        rhs: inner_rhs,
+                        ..
+                    } => {
+                        assert!(matches!(*inner_lhs, ExprAst::NumericConcat { .. }));
+                        assert!(matches!(*inner_rhs, ExprAst::NumericConcat { .. }));
+                    }
+                    other => panic!("expected nested LogOr, got {other:?}"),
+                }
+            }
+            other => panic!("expected LogOr at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_relational_with_numeric_concat() {
+        // `0%{?redos_version} >= 800` — NumericConcat compared to literal.
+        let ast = parse_full("0%{?redos_version} >= 800").unwrap();
+        match ast {
+            ExprAst::Binary {
+                kind: BinOp::Ge,
+                lhs,
+                rhs,
+                ..
+            } => {
+                assert!(matches!(*lhs, ExprAst::NumericConcat { .. }));
+                assert!(matches!(*rhs, ExprAst::Integer { value: 800, .. }));
+            }
+            other => panic!("expected Ge, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_full_user_expression() {
+        // The motivating real-world condition from postgrespro.centos.spec.
+        // Expected tree (precedence: `>=` over `||`, `||` left-assoc):
+        //   ((NC || NC) || NC) || (NC >= 800)
+        let ast =
+            parse_full("0%{?el8} || 0%{?el9} || 0%{?el10} || 0%{?redos_version} >= 800").unwrap();
+        match ast {
+            ExprAst::Binary {
+                kind: BinOp::LogOr,
+                rhs,
+                ..
+            } => {
+                // The rightmost operand of the top-level `||` must be
+                // the `>=` comparison (binds tighter than `||`).
+                assert!(matches!(
+                    *rhs,
+                    ExprAst::Binary {
+                        kind: BinOp::Ge,
+                        ..
+                    }
+                ));
+            }
+            other => panic!("expected LogOr at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn whitespace_breaks_concat_into_trailing_garbage() {
+        // `0 %{?el8}` — with whitespace between the digit and macro,
+        // `parse_full` consumes `0` as Integer, then `%{?el8}` is left
+        // over and `parse_full`'s "rest must be empty" check fails.
+        assert!(parse_full("0 %{?el8}").is_none());
+    }
+
+    #[test]
+    fn three_part_concat_macro_literal_macro() {
+        // `%{a}1%{b}` — exotic but legal: macro, literal `1`, macro.
+        let ast = parse_full("%{a}1%{b}").unwrap();
+        match ast {
+            ExprAst::NumericConcat { parts, .. } => {
+                assert_eq!(parts.len(), 3);
+                assert!(matches!(&parts[0], ConcatPart::Macro { text, .. } if text == "%{a}"));
+                assert!(matches!(&parts[1], ConcatPart::Literal { text, .. } if text == "1"));
+                assert!(matches!(&parts[2], ConcatPart::Macro { text, .. } if text == "%{b}"));
+            }
+            other => panic!("expected NumericConcat, got {other:?}"),
+        }
     }
 }
