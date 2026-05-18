@@ -365,6 +365,35 @@ fn strip_concat_part(p: crate::ast::ConcatPart<Span>) -> crate::ast::ConcatPart<
     }
 }
 
+fn strip_shell_body(body: crate::ast::ShellBody<Span>) -> crate::ast::ShellBody<()> {
+    crate::ast::ShellBody {
+        lines: body.lines,
+        conditionals: body.conditionals.into_iter().map(strip_shell_conditional).collect(),
+    }
+}
+
+fn strip_shell_conditional(
+    c: crate::ast::ShellConditional<Span>,
+) -> crate::ast::ShellConditional<()> {
+    crate::ast::ShellConditional::new(
+        c.branches.into_iter().map(strip_shell_cond_branch).collect(),
+        c.otherwise.map(strip_shell_cond_else),
+        (),
+    )
+}
+
+fn strip_shell_cond_branch(
+    b: crate::ast::ShellCondBranch<Span>,
+) -> crate::ast::ShellCondBranch<()> {
+    crate::ast::ShellCondBranch::new(b.kind, strip_cond_expr(b.expr), (), b.head_line)
+}
+
+fn strip_shell_cond_else(
+    e: crate::ast::ShellCondElse<Span>,
+) -> crate::ast::ShellCondElse<()> {
+    crate::ast::ShellCondElse::new((), e.head_line)
+}
+
 fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
     use crate::ast::{ChangelogEntry, FileTrigger, Scriptlet, Section, Trigger};
     match s {
@@ -382,7 +411,7 @@ fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
         },
         Section::BuildScript { kind, body, .. } => Section::BuildScript {
             kind,
-            body,
+            body: strip_shell_body(body),
             data: (),
         },
         Section::Files {
@@ -412,7 +441,7 @@ fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
             expand_macros,
             quiet,
             from_file,
-            body,
+            body: strip_shell_body(body),
             data: (),
         }),
         Section::Trigger(Trigger {
@@ -427,7 +456,7 @@ fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
             subpkg,
             interp,
             conditions,
-            body,
+            body: strip_shell_body(body),
             data: (),
         }),
         Section::FileTrigger(FileTrigger {
@@ -444,12 +473,12 @@ fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
             interp,
             priority,
             prefixes,
-            body,
+            body: strip_shell_body(body),
             data: (),
         }),
         Section::Verify { subpkg, body, .. } => Section::Verify {
             subpkg,
-            body,
+            body: strip_shell_body(body),
             data: (),
         },
         Section::Changelog { entries, .. } => Section::Changelog {
@@ -470,7 +499,7 @@ fn strip_section(s: crate::ast::Section<Span>) -> crate::ast::Section<()> {
         Section::PatchList { entries, .. } => Section::PatchList { entries, data: () },
         Section::Sepolicy { subpkg, body, .. } => Section::Sepolicy {
             subpkg,
-            body,
+            body: strip_shell_body(body),
             data: (),
         },
     }

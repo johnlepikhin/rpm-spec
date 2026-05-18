@@ -53,7 +53,10 @@ pub use scriptlet::{
     DEFAULT_FILE_TRIGGER_PRIORITY, FileTrigger, FileTriggerKind, Interpreter, Scriptlet,
     ScriptletKind, Trigger, TriggerKind,
 };
-pub use section::{BuildScriptKind, PackageName, Section, ShellBody, SubpkgRef, TextBody};
+pub use section::{
+    BuildScriptKind, PackageName, Section, ShellBody, ShellCondBranch, ShellCondElse,
+    ShellConditional, SubpkgRef, TextBody,
+};
 pub use span::Span;
 pub use text::{
     BcondForm, BuiltinMacro, ConditionalMacro, MacroKind, MacroRef, SIGIL_ALL_ARGS,

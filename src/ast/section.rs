@@ -7,6 +7,7 @@
 #![allow(missing_docs)]
 
 use super::changelog::ChangelogEntry;
+use super::cond::{CondExpr, CondKind};
 use super::files::FilesContent;
 use super::preamble::PreambleContent;
 use super::scriptlet::{FileTrigger, Scriptlet, Trigger};
@@ -32,7 +33,7 @@ pub enum Section<T = ()> {
     /// `%generate_buildrequires` — shell bodies.
     BuildScript {
         kind: BuildScriptKind,
-        body: ShellBody,
+        body: ShellBody<T>,
         data: T,
     },
     /// `%files [-n sub] [-f filelist]` — a list of paths plus directives.
@@ -49,7 +50,7 @@ pub enum Section<T = ()> {
     /// `%verify [-n sub]` — shell body executed by `rpm --verify`.
     Verify {
         subpkg: Option<SubpkgRef>,
-        body: ShellBody,
+        body: ShellBody<T>,
         data: T,
     },
     /// `%changelog` — the single global changelog block.
@@ -70,7 +71,7 @@ pub enum Section<T = ()> {
     /// `%sepolicy [-n sub]` — SELinux module section (RH family).
     Sepolicy {
         subpkg: Option<SubpkgRef>,
-        body: ShellBody,
+        body: ShellBody<T>,
         data: T,
     },
 }
@@ -126,11 +127,122 @@ pub struct TextBody {
 /// *not* parse the bash grammar, but it does distinguish literal text from
 /// embedded macro references so they can be expanded or printed cleanly.
 ///
-/// Conditional blocks (`%if/%endif`) appearing inside a shell body are kept
-/// as text lines, not as structural [`super::cond::Conditional`] nodes.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// Conditional blocks (`%if`/`%else`/`%endif`) appearing inside a shell body
+/// remain present in [`Self::lines`] as plain `Text` (one entry per physical
+/// line, including the directive lines themselves) so existing consumers
+/// that walk `lines` keep working unchanged. The same blocks are *additionally*
+/// surfaced as structural [`ShellConditional`] entries in [`Self::conditionals`],
+/// enabling branch-aware analyses (e.g. `matrix expand`) without parsing the
+/// shell-body text twice.
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
-pub struct ShellBody {
+#[non_exhaustive]
+pub struct ShellBody<T = ()> {
     pub lines: Vec<Text>,
+    /// Conditional `%if`/`%else`/`%endif` blocks recognised inside the body,
+    /// in source order. Empty when the source has no conditionals;
+    /// `#[serde(default)]` keeps backward compatibility with serialised forms
+    /// that pre-date this field.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")
+    )]
+    pub conditionals: Vec<ShellConditional<T>>,
+}
+
+// Manual `Default` impl: we want `ShellBody::<T>::default()` for any `T`,
+// without forcing `T: Default` (the derived form would; that bound then
+// propagates to every `Scriptlet<T>` / `Trigger<T>` / `FileTrigger<T>` that
+// embeds a `ShellBody<T>`).
+impl<T> Default for ShellBody<T> {
+    fn default() -> Self {
+        Self {
+            lines: Vec::new(),
+            conditionals: Vec::new(),
+        }
+    }
+}
+
+/// One `%if`...`%endif` block detected inside a [`ShellBody`].
+///
+/// Carries the parsed expression(s) of each branch plus span/line info so a
+/// consumer can map back into [`ShellBody::lines`]. The branch *bodies* are
+/// not duplicated here — analyzers wanting the body content read it from
+/// `lines` using [`Self::data`] (or the branch's `data`/`head_line`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub struct ShellConditional<T = ()> {
+    /// `%if` / `%ifarch` / ... head plus any `%elif*` clauses, in source order.
+    pub branches: Vec<ShellCondBranch<T>>,
+    /// `%else` clause, if any.
+    pub otherwise: Option<ShellCondElse<T>>,
+    /// Per-node user-data (typically a [`super::span::Span`] over the whole block, from
+    /// `%if`* head to closing `%endif`).
+    pub data: T,
+}
+
+impl<T> ShellConditional<T> {
+    /// Create a new shell-body conditional block.
+    #[must_use]
+    pub fn new(
+        branches: Vec<ShellCondBranch<T>>,
+        otherwise: Option<ShellCondElse<T>>,
+        data: T,
+    ) -> Self {
+        Self {
+            branches,
+            otherwise,
+            data,
+        }
+    }
+}
+
+/// One branch (`%if` / `%elif*`) of a [`ShellConditional`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub struct ShellCondBranch<T = ()> {
+    pub kind: CondKind,
+    pub expr: CondExpr<T>,
+    /// Per-node user-data (typically a [`super::span::Span`] covering this branch from its
+    /// directive line through to the start of the next sibling or the
+    /// closing `%endif`).
+    pub data: T,
+    /// 1-based source line number of the directive line itself.
+    pub head_line: u32,
+}
+
+impl<T> ShellCondBranch<T> {
+    /// Create a new `%if`/`%elif*` branch entry.
+    #[must_use]
+    pub fn new(kind: CondKind, expr: CondExpr<T>, data: T, head_line: u32) -> Self {
+        Self {
+            kind,
+            expr,
+            data,
+            head_line,
+        }
+    }
+}
+
+/// `%else` clause of a [`ShellConditional`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub struct ShellCondElse<T = ()> {
+    /// Per-node user-data (typically a [`super::span::Span`] over the `%else` directive
+    /// line and its body).
+    pub data: T,
+    /// 1-based source line number of the `%else` directive line.
+    pub head_line: u32,
+}
+
+impl<T> ShellCondElse<T> {
+    /// Create a new `%else` clause entry.
+    #[must_use]
+    pub fn new(data: T, head_line: u32) -> Self {
+        Self { data, head_line }
+    }
 }

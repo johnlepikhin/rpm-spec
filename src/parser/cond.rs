@@ -205,9 +205,20 @@ fn elif_kind(frag: &str) -> Option<CondKind> {
     None
 }
 
+/// Shared list of `%if`-family head keywords used both by the full-AST
+/// parser in this file and the shell-body scanner in `section.rs`.
+/// Order is significant: longer prefixes precede their shorter variants
+/// (`%ifarch` before `%if`) so that prefix tests fire on the right keyword.
+pub(crate) const SHELL_IF_KEYWORDS: &[&str] =
+    &["%ifarch", "%ifnarch", "%ifos", "%ifnos", "%if"];
+
+/// Shared list of `%elif`-family head keywords. Same ordering rule as
+/// [`SHELL_IF_KEYWORDS`].
+pub(crate) const SHELL_ELIF_KEYWORDS: &[&str] = &["%elifarch", "%elifos", "%elif"];
+
 /// A keyword must be followed by whitespace, EOL, or EOF — otherwise
 /// `%endifFoo` would be confused with `%endif`.
-fn starts_with_keyword(haystack: &str, keyword: &str) -> bool {
+pub(crate) fn starts_with_keyword(haystack: &str, keyword: &str) -> bool {
     if !haystack.starts_with(keyword) {
         return false;
     }
@@ -232,7 +243,7 @@ fn consume_else(input: Input<'_>) -> IResult<Input<'_>, Input<'_>> {
     Ok((after_tail, after_tail))
 }
 
-fn parse_branch_head<'a>(
+pub(crate) fn parse_branch_head<'a>(
     input: Input<'a>,
     allow_elif: bool,
 ) -> IResult<Input<'a>, (CondKind, CondExpr<Span>)> {

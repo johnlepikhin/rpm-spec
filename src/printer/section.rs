@@ -79,7 +79,7 @@ fn print_package<T>(p: &mut Printer<'_>, name: &PackageName, content: &[Preamble
 // Build-scripts
 // ---------------------------------------------------------------------
 
-fn print_build_script(p: &mut Printer<'_>, kind: BuildScriptKind, body: &ShellBody) {
+fn print_build_script<T>(p: &mut Printer<'_>, kind: BuildScriptKind, body: &ShellBody<T>) {
     p.write_indent();
     p.emit(TokenKind::SectionKeyword, build_script_keyword(kind));
     p.newline();
@@ -102,7 +102,7 @@ fn build_script_keyword(k: BuildScriptKind) -> &'static str {
 // %verify / %sepolicy
 // ---------------------------------------------------------------------
 
-fn print_verify_section(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &ShellBody) {
+fn print_verify_section<T>(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &ShellBody<T>) {
     p.write_indent();
     p.emit(TokenKind::SectionKeyword, "%verify");
     print_subpkg(p, subpkg);
@@ -110,7 +110,7 @@ fn print_verify_section(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &
     print_shell_body(p, body);
 }
 
-fn print_sepolicy(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &ShellBody) {
+fn print_sepolicy<T>(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &ShellBody<T>) {
     p.write_indent();
     p.emit(TokenKind::SectionKeyword, "%sepolicy");
     print_subpkg(p, subpkg);
@@ -137,7 +137,7 @@ fn print_list_section(p: &mut Printer<'_>, keyword: &str, entries: &[Text]) {
 // Shared helpers
 // ---------------------------------------------------------------------
 
-fn print_shell_body(p: &mut Printer<'_>, body: &ShellBody) {
+fn print_shell_body<T>(p: &mut Printer<'_>, body: &ShellBody<T>) {
     for line in &body.lines {
         p.write_indent();
         print_body_literal_escaped(p, line, TokenKind::ShellBody);
@@ -187,6 +187,7 @@ mod tests {
         let s: Section<()> = Section::BuildScript {
             kind: BuildScriptKind::Prep,
             body: ShellBody {
+                conditionals: Vec::new(),
                 lines: vec![Text::from("autosetup")],
             },
             data: (),

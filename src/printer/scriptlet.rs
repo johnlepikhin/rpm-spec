@@ -83,7 +83,7 @@ fn print_interp(p: &mut Printer<'_>, interp: Option<&Interpreter>) {
     }
 }
 
-fn print_shell_body(p: &mut Printer<'_>, body: &crate::ast::ShellBody) {
+fn print_shell_body<T>(p: &mut Printer<'_>, body: &crate::ast::ShellBody<T>) {
     for line in &body.lines {
         p.write_indent();
         print_text(p, line);
@@ -164,6 +164,7 @@ mod tests {
             quiet: false,
             from_file: None,
             body: ShellBody {
+                conditionals: Vec::new(),
                 lines: vec![Text::from("echo hi")],
             },
             data: (),
@@ -180,7 +181,7 @@ mod tests {
             expand_macros: false,
             quiet: false,
             from_file: None,
-            body: ShellBody { lines: Vec::new() },
+            body: ShellBody { lines: Vec::new(), conditionals: Vec::new() },
             data: (),
         };
         assert_eq!(render(&s), "%post -p /sbin/ldconfig\n");
@@ -196,6 +197,7 @@ mod tests {
             quiet: false,
             from_file: None,
             body: ShellBody {
+                conditionals: Vec::new(),
                 lines: vec![Text::from("print('hi')")],
             },
             data: (),
@@ -213,6 +215,7 @@ mod tests {
             quiet: false,
             from_file: None,
             body: ShellBody {
+                conditionals: Vec::new(),
                 lines: vec![Text::from("echo")],
             },
             data: (),
@@ -229,7 +232,7 @@ mod tests {
             expand_macros: false,
             quiet: false,
             from_file: None,
-            body: ShellBody { lines: Vec::new() },
+            body: ShellBody { lines: Vec::new(), conditionals: Vec::new() },
             data: (),
         };
         assert_eq!(render(&s), "%post -n libfoo\n");
@@ -254,6 +257,7 @@ mod tests {
                 }),
             ],
             body: ShellBody {
+                conditionals: Vec::new(),
                 lines: vec![Text::from("do-it")],
             },
             data: (),
@@ -270,6 +274,7 @@ mod tests {
             priority: Some(200),
             prefixes: vec![Text::from("/usr/lib")],
             body: ShellBody {
+                conditionals: Vec::new(),
                 lines: vec![Text::from("act")],
             },
             data: (),

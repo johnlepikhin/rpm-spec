@@ -26,7 +26,7 @@ pub struct Scriptlet<T = ()> {
     pub quiet: bool,
     /// `-f FILE` — body read from `FILE` instead of inline.
     pub from_file: Option<Text>,
-    pub body: ShellBody,
+    pub body: ShellBody<T>,
     pub data: T,
 }
 
@@ -66,7 +66,7 @@ pub struct Trigger<T = ()> {
     pub interp: Option<Interpreter>,
     /// Conditions written after `--` and separated by commas.
     pub conditions: Vec<DepExpr>,
-    pub body: ShellBody,
+    pub body: ShellBody<T>,
     pub data: T,
 }
 
@@ -93,7 +93,7 @@ pub struct FileTrigger<T = ()> {
     pub priority: Option<u32>,
     /// Path prefixes written after `--`.
     pub prefixes: Vec<Text>,
-    pub body: ShellBody,
+    pub body: ShellBody<T>,
     pub data: T,
 }
 
