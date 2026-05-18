@@ -457,7 +457,12 @@ fn scan_shell_cond_directive<'a>(
             return;
         }
         if let Ok((_, (kind, expr))) = parse_branch_head(line_start, true) {
-            patch_last_branch_end(top, line_input.location_offset());
+            patch_last_branch_end(
+                top,
+                line_input.location_offset(),
+                line_start.location_line(),
+                u32::try_from(line_start.get_column()).unwrap_or(u32::MAX),
+            );
             top.branches.push(ShellCondBranch {
                 kind,
                 expr,
@@ -485,7 +490,12 @@ fn scan_shell_cond_directive<'a>(
                 Some(line_span),
             );
         }
-        patch_last_branch_end(top, line_input.location_offset());
+        patch_last_branch_end(
+            top,
+            line_input.location_offset(),
+            line_start.location_line(),
+            u32::try_from(line_start.get_column()).unwrap_or(u32::MAX),
+        );
         top.otherwise = Some(ShellCondElse {
             data: line_span,
             head_line,
@@ -507,7 +517,15 @@ fn scan_shell_cond_directive<'a>(
         };
         // Extend the last branch (or `%else`) to cover up to `%endif`'s end.
         let endif_end_byte = line_input.location_offset() + line_input.fragment().len();
-        patch_last_branch_end(&mut pending, endif_end_byte);
+        let line_len_for_patch = u32::try_from(line_input.fragment().len()).unwrap_or(u32::MAX);
+        let line_start_col_for_patch =
+            u32::try_from(line_start.get_column()).unwrap_or(u32::MAX);
+        patch_last_branch_end(
+            &mut pending,
+            endif_end_byte,
+            line_start.location_line(),
+            line_len_for_patch.saturating_add(line_start_col_for_patch),
+        );
         let line_len_u32 = u32::try_from(line_input.fragment().len()).unwrap_or(u32::MAX);
         let line_start_col_u32 = u32::try_from(line_start.get_column()).unwrap_or(u32::MAX);
         let after_line_col_u32 = u32::try_from(after_line.get_column()).unwrap_or(u32::MAX);
@@ -545,9 +563,20 @@ fn starts_with_any_elif_head(frag: &str) -> bool {
         .any(|kw| starts_with_keyword(frag, kw))
 }
 
-/// Patch the most recently added branch's span to cover its body up to `end_byte`.
-/// Called when a sibling (`%elif`/`%else`) or the closing `%endif` is seen.
-fn patch_last_branch_end(pending: &mut PendingShellCond, end_byte: usize) {
+/// Patch the most recently added branch's span to cover its body up to
+/// `end_byte` / (`end_line`, `end_col`). Called when a sibling
+/// (`%elif`/`%else`) or the closing `%endif` is seen — the new directive's
+/// own line/column become the branch's end-of-span so downstream consumers
+/// (e.g. `matrix impact`'s per-profile filter) can derive correct body
+/// line ranges. The previous version of this helper kept the stale
+/// `end_line` from the original `%if` head, producing a degenerate
+/// single-line range that caused active-line filtering to silently no-op.
+fn patch_last_branch_end(
+    pending: &mut PendingShellCond,
+    end_byte: usize,
+    end_line: u32,
+    end_col: u32,
+) {
     if pending.in_else {
         // Body of `%else` already tracked separately via `otherwise.data`.
         return;
@@ -556,7 +585,7 @@ fn patch_last_branch_end(pending: &mut PendingShellCond, end_byte: usize) {
         return;
     };
     if end_byte >= last.data.start_byte {
-        last.data = span_extend(last.data, end_byte, last.data.end_line, last.data.end_column);
+        last.data = span_extend(last.data, end_byte, end_line, end_col);
     }
 }
 
