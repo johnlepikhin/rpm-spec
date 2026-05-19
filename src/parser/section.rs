@@ -308,9 +308,66 @@ pub(crate) fn collect_shell_body_until_section_header<'a>(
     // Rate-limit the depth-overflow warning: emit once per shell body, no
     // matter how many `%if`s exceed `MAX_SHELL_COND_DEPTH`.
     let mut depth_warned = false;
+    // Rewind anchor for the "%if wraps the next section" idiom: when the
+    // shell body grows the first unclosed `%if`, snapshot the cursor + the
+    // number of body lines collected so far. If a section header shows up
+    // before the matching `%endif`, the `%if` was section-level all along —
+    // we rewind the body to just before it and let the outer spec-level
+    // parser handle the conditional. See the inline comment on the rewind
+    // branch below for the full rationale and the tests
+    // `shell_body_rewinds_when_section_header_appears_inside_if` /
+    // `shell_body_preserves_properly_closed_if_then_section`.
+    let mut rewind_anchor: Option<(Input<'a>, usize)> = None;
 
     while !cursor.fragment().is_empty() {
+        // Orphan `%endif` / `%else` / `%elif` with NO pending shell-level
+        // `%if` on the stack means the directive closes an outer
+        // top-level conditional (e.g. the body of a `%postun` that lives
+        // inside `%if %plperl ... %endif`). Hand it back to the spec-level
+        // parser by breaking — the rewind in the section-header arm
+        // below already covers the symmetric "%if opens an outer block"
+        // case.
+        if stack.is_empty()
+            && let Some(frag) = first_nonspace_keyword(cursor)
+            && (starts_with_keyword(frag, "%endif")
+                || starts_with_keyword(frag, "%else")
+                || starts_with_any_elif_head(frag))
+        {
+            break;
+        }
         if peek_section_header(cursor).is_some() {
+            // Section-level `%if` wrapping subsequent sections (common rpm
+            // idiom in real specs):
+            //
+            //     %postun server
+            //     /sbin/ldconfig
+            //
+            //     %if %plperl
+            //     %post -p /sbin/ldconfig plperl
+            //     %postun -p /sbin/ldconfig plperl
+            //     %endif
+            //
+            // The previous implementation greedily kept consuming the
+            // scriptlet body, saw `%if %plperl` as a shell-level
+            // conditional, then choked on the next `%post` header (which
+            // breaks the loop with the conditional still unclosed) and
+            // emitted a spurious "unterminated `%if`" error. The fix:
+            // when we detect a section header AND an outer `%if` is still
+            // open, retract the body back to just before that `%if` and
+            // let the spec-level parser pick up the conditional —
+            // sections inside the branches are perfectly legal at the
+            // spec level.
+            if let Some((rewind_cursor, rewind_lines_len)) = rewind_anchor {
+                let rewind_offset = rewind_cursor.location_offset();
+                lines.truncate(rewind_lines_len);
+                // Drop any nested conditionals that were finalised
+                // between the outer `%if` head and the rewind point —
+                // they belong to the section-level block we're handing
+                // back to the spec parser.
+                conditionals.retain(|c| (c.data.start_byte as usize) < rewind_offset);
+                stack.clear();
+                cursor = rewind_cursor;
+            }
             break;
         }
         let here = cursor;
@@ -322,6 +379,7 @@ pub(crate) fn collect_shell_body_until_section_header<'a>(
             break;
         }
 
+        let stack_was_empty = stack.is_empty();
         scan_shell_cond_directive(
             state,
             here,
@@ -331,6 +389,15 @@ pub(crate) fn collect_shell_body_until_section_header<'a>(
             &mut conditionals,
             &mut depth_warned,
         );
+        // Track the rewind anchor: empty→non-empty transitions record
+        // (cursor before the line, current `lines.len()`); non-empty→
+        // empty clears the anchor since every `%if` we know about is
+        // now properly closed.
+        match (stack_was_empty, stack.is_empty()) {
+            (true, false) => rewind_anchor = Some((here, lines.len())),
+            (false, true) => rewind_anchor = None,
+            _ => {}
+        }
 
         let line = parse_body_as_text(state, line_input.fragment());
         lines.push(line);
@@ -555,6 +622,16 @@ fn starts_with_any_if_head(frag: &str) -> bool {
     SHELL_IF_KEYWORDS
         .iter()
         .any(|kw| starts_with_keyword(frag, kw))
+}
+
+/// Strip leading whitespace and return the rest as `Some(&str)` when it
+/// begins with a `%` keyword — caller pairs this with `starts_with_*`
+/// helpers to peek the current line's directive without consuming.
+/// Returns `None` for blank / non-keyword lines so the caller short-
+/// circuits quickly.
+fn first_nonspace_keyword<'a>(cursor: Input<'a>) -> Option<&'a str> {
+    let frag = (*cursor.fragment()).trim_start_matches([' ', '\t']);
+    if frag.starts_with('%') { Some(frag) } else { None }
 }
 
 fn starts_with_any_elif_head(frag: &str) -> bool {
@@ -1225,6 +1302,103 @@ mod tests {
         let inner = &body.conditionals[1].data;
         assert!(outer.start_byte <= inner.start_byte);
         assert!(outer.end_byte >= inner.end_byte);
+    }
+
+    #[test]
+    fn shell_body_rewinds_when_section_header_appears_inside_if() {
+        // Real-world rpm idiom: `%if` wraps subsequent sections, not the
+        // scriptlet body. Previously the shell-body collector would
+        // greedily swallow `%if`, hit the next `%post` header with the
+        // `%if` still open, and emit a spurious "unterminated `%if`"
+        // error. The rewind anchor must hand the `%if` back to the
+        // spec-level parser, leaving the scriptlet body intact.
+        let src = "%postun server\n\
+                   /sbin/ldconfig\n\
+                   \n\
+                   %if %plperl\n\
+                   %post -p /sbin/ldconfig plperl\n\
+                   %endif\n";
+        let state = ParserState::new();
+        let inp = Input::new(src);
+        let (rest, sec_opt) = parse_section(&state, inp).unwrap();
+        let sec = sec_opt.expect("section recognized");
+        // The `%postun server` scriptlet body must contain only the
+        // `/sbin/ldconfig` line (trailing blank trimmed). The `%if`
+        // and everything after it stay in `rest` for the next
+        // top-level parse iteration.
+        match sec {
+            Section::Scriptlet(scr) => {
+                let body = &scr.body;
+                assert_eq!(
+                    body.lines.len(),
+                    1,
+                    "scriptlet body should stop before `%if`, got {:?}",
+                    body.lines.iter().map(|t| t.literal_str().unwrap_or("?")).collect::<Vec<_>>()
+                );
+                assert!(body.conditionals.is_empty(), "`%if` belongs to spec level, not the body");
+            }
+            other => panic!("expected scriptlet section, got {other:?}"),
+        }
+        assert!(
+            rest.fragment().starts_with("%if %plperl"),
+            "rest should resume at the rewound `%if`, got: {:?}",
+            &rest.fragment().chars().take(40).collect::<String>()
+        );
+        // And no unterminated-conditional error should have been emitted.
+        let diags = state.snapshot_diagnostics();
+        let errs: Vec<&str> = diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some(codes::E_UNTERMINATED_CONDITIONAL))
+            .map(|d| d.message.as_str())
+            .collect();
+        assert!(
+            errs.is_empty(),
+            "no unterminated-`%if` error should fire; got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn shell_body_preserves_properly_closed_if_then_section() {
+        // Sanity check the rewind doesn't break the common case where
+        // `%if`/`%endif` is fully contained within the scriptlet AND a
+        // section header follows.
+        let src = "%post\n\
+                   %if 0%{?something}\n\
+                   echo conditional\n\
+                   %endif\n\
+                   echo always\n\
+                   %postun\n\
+                   /sbin/ldconfig\n";
+        let state = ParserState::new();
+        let inp = Input::new(src);
+        let (rest, sec_opt) = parse_section(&state, inp).unwrap();
+        let sec = sec_opt.expect("section recognized");
+        match sec {
+            Section::Scriptlet(scr) => {
+                let body = &scr.body;
+                // Body should include the %if/echo/%endif/echo lines —
+                // four lines (blank trimmed because there's no trailing
+                // blank between body and `%postun`).
+                assert!(
+                    body.lines.len() >= 4,
+                    "scriptlet body should retain all four lines, got {:?}",
+                    body.lines.iter().map(|t| t.literal_str().unwrap_or("?")).collect::<Vec<_>>()
+                );
+                assert_eq!(body.conditionals.len(), 1, "properly closed `%if` stays shell-level");
+            }
+            other => panic!("expected scriptlet section, got {other:?}"),
+        }
+        assert!(
+            rest.fragment().starts_with("%postun"),
+            "rest should start at the next section header"
+        );
+        let diags = state.snapshot_diagnostics();
+        let errs: Vec<&str> = diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some(codes::E_UNTERMINATED_CONDITIONAL))
+            .map(|d| d.message.as_str())
+            .collect();
+        assert!(errs.is_empty(), "no spurious unterminated-`%if` error; got {errs:?}");
     }
 
     #[test]

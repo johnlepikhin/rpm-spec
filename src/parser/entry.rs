@@ -71,6 +71,25 @@ pub fn parse_str_with_spans(input: &str) -> ParseResult<Span> {
             continue;
         }
 
+        // Stray `%endif` / `%else` / `%elif` at the outermost level —
+        // diagnose explicitly so the generic recovery doesn't classify
+        // the line as an unrecognised macro call.
+        if let Some(closer) = peek_stray_cond_closer(cursor)
+            && let Ok((rest, _)) = physical_line(cursor)
+        {
+            state.push_error_code(
+                codes::E_UNTERMINATED_CONDITIONAL,
+                format!("`{closer}` without matching `%if`"),
+                Some(span_for_line(&cursor, &as_line_input(&cursor, closer))),
+            );
+            let after = match line_terminator(rest) {
+                Ok((r, ())) => r,
+                Err(_) => rest,
+            };
+            cursor = after;
+            continue;
+        }
+
         // %if / %ifarch / %ifos block.
         if let Ok((rest, c)) = parse_conditional(&state, cursor, parse_top_level_item) {
             items.push(SpecItem::Conditional(c));
@@ -158,6 +177,35 @@ pub fn parse_str_with_spans(input: &str) -> ParseResult<Span> {
     ParseResult { spec, diagnostics }
 }
 
+/// Recognise a top-level line whose first non-whitespace keyword is
+/// `%endif`, `%else`, or `%elif*`. Returns the canonical keyword
+/// (without the leading whitespace) when matched, else `None`.
+///
+/// Lives at top-level scope so it never sees lines inside a
+/// `parse_conditional` body (that path peeks the keyword via
+/// `peek_cond_keyword` and never invokes `parse_top_level_item` for
+/// those lines).
+fn peek_stray_cond_closer<'a>(cursor: Input<'a>) -> Option<&'a str> {
+    let frag = (*cursor.fragment()).trim_start_matches([' ', '\t']);
+    if frag.starts_with("%endif") {
+        Some("%endif")
+    } else if frag.starts_with("%else") && !frag.starts_with("%elseif") {
+        Some("%else")
+    } else if frag.starts_with("%elif") {
+        Some("%elif")
+    } else {
+        None
+    }
+}
+
+/// Build a one-line synthetic Input pointing at the closer keyword so
+/// `span_for_line` can underline just the keyword text — without this
+/// the diagnostic would point at the cursor column (1) and miss the
+/// keyword span.
+fn as_line_input<'a>(cursor: &Input<'a>, _keyword: &str) -> Input<'a> {
+    *cursor
+}
+
 /// Body-item parser used by `parse_conditional` at the top level. Returns
 /// `Vec<SpecItem>` because multi-dep preamble lines expand into multiple
 /// items in one source-line step.
@@ -165,6 +213,28 @@ fn parse_top_level_item<'a>(
     state: &ParserState,
     input: Input<'a>,
 ) -> nom::IResult<Input<'a>, Vec<SpecItem<Span>>> {
+    // Stray `%endif` / `%else` / `%elif` at the top level (i.e. NOT
+    // inside a `parse_conditional` body — that path peeks the keyword
+    // and consumes it directly). Diagnose and skip the line so the
+    // recovery loop doesn't dump a generic "line not recognized"
+    // warning over what's actually a malformed conditional. Mirrors
+    // the diagnostic that `scan_shell_cond_directive` used to emit
+    // before the shell-body rewind changed its policy.
+    if let Some(line_text) = peek_stray_cond_closer(input)
+        && let Ok((rest, _)) = physical_line(input)
+    {
+        state.push_error_code(
+            codes::E_UNTERMINATED_CONDITIONAL,
+            format!("`{line_text}` without matching `%if`"),
+            Some(span_for_line(&input, &as_line_input(&input, line_text))),
+        );
+        // Skip the line terminator too, so the outer loop advances.
+        let after = match line_terminator(rest) {
+            Ok((r, ())) => r,
+            Err(_) => rest,
+        };
+        return Ok((after, vec![]));
+    }
     if let Ok((rest, _)) = blank_line(input) {
         if rest.location_offset() > input.location_offset() {
             return Ok((rest, vec![SpecItem::Blank]));
@@ -184,6 +254,13 @@ fn parse_top_level_item<'a>(
     }
     if let Ok((rest, c)) = parse_conditional(state, input, parse_top_level_item) {
         return Ok((rest, vec![SpecItem::Conditional(c)]));
+    }
+    // Section headers inside `%if`/`%else` arms — required for the
+    // "%if %plperl / %post / %postun / %endif" idiom where the
+    // conditional wraps subsequent sections (not arbitrary preamble
+    // lines). Mirrors the section attempt in the outer parse loop.
+    if let Ok((rest, Some(section))) = parse_section(state, input) {
+        return Ok((rest, vec![SpecItem::Section(Box::new(section))]));
     }
     if let Ok((rest, items)) = parse_preamble_line(state, input) {
         if !items.is_empty() {
