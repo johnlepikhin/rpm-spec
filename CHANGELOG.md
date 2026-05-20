@@ -6,6 +6,69 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
+## 0.4.0
+
+### Added
+
+- `ExprAst::NumericConcat { parts, data }` plus `ConcatPart::{Literal,
+  Macro}` model the RPM idiom `0%{?el8}` — a literal digit-string glued
+  to one or more `%{…}` macro references without intervening
+  whitespace. Single-atom inputs are still emitted as the canonical
+  `Integer` / `Macro` variants. Smart constructors `ConcatPart::literal`
+  / `ConcatPart::macro_ref` are generic over `T: Default`. A
+  `MAX_CONCAT_PARTS = 64` cap bounds memory on adversarial input.
+- `ShellConditional<T>`, `ShellCondBranch<T>`, `ShellCondElse<T>` —
+  structural surface of `%if` / `%elif*` / `%else` / `%endif` blocks
+  detected inside a `ShellBody<T>`. Directive lines remain in
+  `ShellBody::lines` as plain text (back-compat); the new
+  `ShellBody::conditionals` field carries the parsed branches. Each
+  type is `#[non_exhaustive]` with a `pub fn new(...)` constructor so
+  external crates can build instances.
+- `BuiltinMacro::With` / `BuiltinMacro::Without` plus
+  `parse_bcond_verbatim` helper — first-class structural representation
+  of `%{with foo}` / `%{without foo}` macros (was previously absorbed
+  into the generic macro-reference path). Enables matrix-expand
+  consumers to enumerate `--with`/`--without` flags without a separate
+  bcond scan.
+
+### Changed
+
+- **Breaking (pre-1.0):** `ShellBody` is now generic — `ShellBody<T = ()>`.
+  Most direct construction sites continue to compile because `T = ()`
+  is the default and inference resolves it from the surrounding
+  `Section<()>` context, but any code that named `ShellBody` as a
+  concrete type (e.g. `fn foo(b: &ShellBody)`) now needs `&ShellBody<()>`
+  or to be itself generic over `T`. Similarly `Scriptlet<T>`,
+  `Trigger<T>`, `FileTrigger<T>`, and `Section::{BuildScript, Verify,
+  Sepolicy}` now embed `body: ShellBody<T>` instead of `body: ShellBody`.
+  `parse_str_with_spans` still produces `ShellBody<Span>` and
+  `parse_str` still produces `ShellBody<()>` via the existing strip
+  pipeline.
+- New diagnostic emissions inside shell-body `%if` scanning: unterminated
+  `%if` → `E_UNTERMINATED_CONDITIONAL`, repeated `%else` →
+  `W_MULTIPLE_ELSE`, `%elif` after `%else` → `W_ELIF_AFTER_ELSE`. These
+  cases were previously silent.
+- `MAX_SHELL_COND_DEPTH = 64` DoS guard on nested `%if` blocks inside a
+  shell body, with a single rate-limited warning when the limit is hit.
+
+### Fixed
+
+- `parse_section` and the shell-body collector now rewind correctly
+  when a section header (`%post`, `%postun`, …) appears inside an open
+  `%if`. Previously the shell-body pass greedily consumed the `%if`,
+  hit the next section header, and emitted a spurious "unterminated
+  `%if` inside shell body" error. The `%if … %post -p … %postun -p …
+  %endif` idiom (dominant in real specs) now parses cleanly with the
+  conditional wrapping the subsequent sections.
+- `patch_last_branch_end` now threads the triggering directive's own
+  `(end_line, end_column)` into the patched branch span instead of
+  reusing the original `%if` head's single-line range. Downstream
+  consumers that derive line ranges from `(start_line..=end_line)` now
+  see the real body extent.
+- `parse_concat_or_single` no longer has a dead `parts.is_empty()`
+  branch — the caller's dispatch already guarantees ≥1 byte is
+  consumed; the runtime check has been replaced with a `debug_assert!`.
+
 ## 0.3.4
 
 ### Fixed
