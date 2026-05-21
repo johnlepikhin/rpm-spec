@@ -8,11 +8,12 @@
 
 use nom::{IResult, Parser, bytes::complete::tag, error::ErrorKind, error_position};
 
-use crate::ast::{CondBranch, CondExpr, CondKind, Conditional, ExprAst, Span, Text, TextSegment};
+use crate::ast::{CondBranch, CondExpr, CondKind, Conditional, ExprAst, Span, Text};
 use crate::parse_result::codes;
 
 use super::input::{Input, span_between};
 use super::state::ParserState;
+use super::text::parse_body_as_text;
 use super::util::{line_terminator, logical_line, space0};
 
 /// Parse a `%if` / `%ifarch` / `%ifos` block. `parse_body_items` is invoked
@@ -302,6 +303,16 @@ pub(crate) fn parse_branch_head<'a>(
     };
     let raw_trim = raw.trim_end();
 
+    // Decode each token through the full Text grammar so escapes like
+    // `%%{X}` and inline macro references survive a parse/print round
+    // trip unchanged. Diagnostics emitted here would have spans
+    // relative to the (already-truncated) head fragment rather than to
+    // the original source, so a throwaway `ParserState` swallows
+    // them — the spans would be misleading otherwise. Real head-shape
+    // errors are reported via `parse_expression` and `logical_line`
+    // upstream.
+    let head_state = ParserState::new();
+
     let expr = match kind {
         CondKind::IfArch
         | CondKind::IfNArch
@@ -311,14 +322,12 @@ pub(crate) fn parse_branch_head<'a>(
         | CondKind::ElifOs => CondExpr::ArchList(
             raw_trim
                 .split_whitespace()
-                .map(|tok| Text {
-                    segments: vec![TextSegment::Literal(tok.to_owned())],
-                })
+                .map(|tok| parse_body_as_text(&head_state, tok))
                 .collect(),
         ),
-        CondKind::If | CondKind::Elif => CondExpr::Raw(Text {
-            segments: vec![TextSegment::Literal(raw_trim.to_owned())],
-        }),
+        CondKind::If | CondKind::Elif => {
+            CondExpr::Raw(parse_body_as_text(&head_state, raw_trim))
+        }
     };
 
     Ok((after_value, (kind, expr)))
