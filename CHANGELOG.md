@@ -6,6 +6,34 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/),
 and this crate adheres to [Semantic Versioning](https://semver.org/) once
 it reaches `0.1.0`.
 
+## 0.4.1
+
+### Fixed
+
+- `parse_branch_head` now decodes `%%` escapes in `%ifarch` / `%ifos` /
+  `%if` head tokens by routing each token through `parse_body_as_text`.
+  Previously the raw lexeme (e.g. `%%{ix86}`) was kept as a single
+  `TextSegment::Literal`; the pretty-printer's `print_literal_escaped`
+  then re-escaped every `%`, emitting `%%%%{ix86}`. Each successive
+  `parse → print` cycle doubled the escape (`%%%%%%%%{ix86}`, …),
+  corrupting any spec formatted more than once with `format
+  --in-place`. Regression tests live in `tests/ifarch_macro_escape.rs`.
+- The pretty-printer now strips leading ` ` / `\t` from the first
+  literal segment of every shell-body and text-body line, making the
+  printer the sole source of indentation. Previously, lines captured
+  by the parser with their original whitespace (typical for sections
+  nested under `%if`, e.g. `%if … / %post / %systemd_post foo.service
+  / %endif`) caused `parse → print(indent=N)` cycles to cumulatively
+  double the indent on every pass. Applies to `%description`, `%prep`,
+  `%build`, `%install`, `%check`, `%clean`, `%verify`, `%sepolicy`,
+  and all scriptlet/trigger bodies. Regression tests in
+  `tests/scriptlet_indent.rs`.
+
+### Changed
+
+- Internal cleanup: dropped a redundant `as usize` cast in
+  `parser::section`'s rewind path (clippy `unnecessary_cast`).
+
 ## 0.4.0
 
 ### Added
