@@ -364,7 +364,7 @@ pub(crate) fn collect_shell_body_until_section_header<'a>(
                 // between the outer `%if` head and the rewind point —
                 // they belong to the section-level block we're handing
                 // back to the spec parser.
-                conditionals.retain(|c| (c.data.start_byte as usize) < rewind_offset);
+                conditionals.retain(|c| c.data.start_byte < rewind_offset);
                 stack.clear();
                 cursor = rewind_cursor;
             }
