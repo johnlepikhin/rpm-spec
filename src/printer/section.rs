@@ -2,13 +2,14 @@
 
 use crate::ast::{
     BuildScriptKind, PackageName, PreambleContent, Section, ShellBody, SubpkgRef, Text, TextBody,
+    TextSegment,
 };
 
 use super::changelog::print_section_changelog;
 use super::files::print_files_section;
 use super::preamble::print_preamble_content;
 use super::scriptlet::{print_file_trigger, print_scriptlet, print_trigger};
-use super::text::{print_body_literal_escaped, print_text};
+use super::text::print_text;
 use super::util::print_subpkg;
 use super::{Printer, TokenKind};
 
@@ -47,7 +48,7 @@ fn print_description(p: &mut Printer<'_>, subpkg: Option<&SubpkgRef>, body: &Tex
     p.newline();
     for line in &body.lines {
         p.write_indent();
-        print_body_literal_escaped(p, line, TokenKind::TextBody);
+        print_body_trim_leading_ws(p, line, TokenKind::TextBody);
         p.newline();
     }
 }
@@ -140,8 +141,38 @@ fn print_list_section(p: &mut Printer<'_>, keyword: &str, entries: &[Text]) {
 fn print_shell_body<T>(p: &mut Printer<'_>, body: &ShellBody<T>) {
     for line in &body.lines {
         p.write_indent();
-        print_body_literal_escaped(p, line, TokenKind::ShellBody);
+        print_body_trim_leading_ws(p, line, TokenKind::ShellBody);
         p.newline();
+    }
+}
+
+/// Render a body line like [`print_body_literal_escaped`], but strip any
+/// leading whitespace from the first literal segment so the printer is the
+/// sole source of indentation.
+///
+/// Same idempotence guard as `print_text_trim_leading_ws` in `scriptlet.rs`,
+/// applied to `%description` / `%prep` / `%build` / `%install` / `%check`
+/// / `%clean` / `%verify` / `%sepolicy` bodies that the parser captured
+/// with leading whitespace (typical for sections nested under `%if`).
+fn print_body_trim_leading_ws(p: &mut Printer<'_>, t: &Text, kind: TokenKind) {
+    let mut trimmed = false;
+    for seg in &t.segments {
+        match seg {
+            TextSegment::Literal(s) if !trimmed => {
+                let stripped = s.trim_start_matches([' ', '\t']);
+                if !stripped.is_empty() {
+                    p.emit(kind, &stripped.replace('%', "%%"));
+                    trimmed = true;
+                }
+            }
+            TextSegment::Literal(s) => {
+                p.emit(kind, &s.replace('%', "%%"));
+            }
+            TextSegment::Macro(m) => {
+                super::text::print_macro_ref(p, m);
+                trimmed = true;
+            }
+        }
     }
 }
 

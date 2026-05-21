@@ -86,8 +86,42 @@ fn print_interp(p: &mut Printer<'_>, interp: Option<&Interpreter>) {
 fn print_shell_body<T>(p: &mut Printer<'_>, body: &crate::ast::ShellBody<T>) {
     for line in &body.lines {
         p.write_indent();
-        print_text(p, line);
+        print_text_trim_leading_ws(p, line);
         p.newline();
+    }
+}
+
+/// Render a body line, stripping any leading whitespace from its first
+/// literal segment so the printer is the sole source of indentation.
+///
+/// Background: the parser tolerates (and preserves) leading whitespace
+/// before macro statements that live inside a `%if`. Without trimming,
+/// a `parse → print(indent=N) → parse → print(indent=N)` cycle would
+/// cumulatively double the indent on every pass: the literal whitespace
+/// captured by the parser would be re-emitted in addition to the
+/// printer's own `write_indent()`. Trimming here keeps the printer
+/// idempotent — see `tests/scriptlet_indent.rs`.
+fn print_text_trim_leading_ws(p: &mut Printer<'_>, t: &crate::ast::Text) {
+    use crate::ast::TextSegment;
+    let mut trimmed = false;
+    for seg in &t.segments {
+        match seg {
+            TextSegment::Literal(s) if !trimmed => {
+                let stripped = s.trim_start_matches([' ', '\t']);
+                if !stripped.is_empty() {
+                    super::text::print_literal_escaped(p, stripped);
+                    trimmed = true;
+                }
+                // If `stripped` is empty the whole segment was whitespace;
+                // drop it but keep `trimmed = false` so the next literal
+                // segment is also trimmed (handles rare segmentations).
+            }
+            TextSegment::Literal(s) => super::text::print_literal_escaped(p, s),
+            TextSegment::Macro(m) => {
+                super::text::print_macro_ref(p, m);
+                trimmed = true;
+            }
+        }
     }
 }
 
